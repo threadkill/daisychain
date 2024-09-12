@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 3.12.0)
+cmake_minimum_required (VERSION 3.21.1)
 project (chain)
 
 add_compile_definitions (ELPP_NO_LOG_TO_FILE=1)
@@ -60,6 +60,17 @@ set (chain_SOURCES
 
 
 if (APPLE)
+    find_program (Qt6_TOOL_PATH
+        NAMES macdeployqt6
+        HINTS "${Qt6_DIR}/bin"
+    )
+
+    if (Qt6_TOOL_PATH)
+        message (STATUS "Found Qt6 binary: ${Qt6_TOOL_PATH}")
+    else()
+        message (FATAL_ERROR "Qt6 binary ${Qt6_TOOL_PATH} not found!")
+    endif()
+
     list (APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
     set (MACOSX_BUNDLE_BUNDLE_NAME "DaisyChain")
     set (MACOSX_BUNDLE_ICON_FILE daisychain.icns)
@@ -69,9 +80,23 @@ if (APPLE)
     install(
         CODE "
         include (BundleUtilities)
-        copy_and_fixup_bundle (${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.app ${CMAKE_INSTALL_PREFIX}/${MACOSX_BUNDLE_BUNDLE_NAME}.app \"\" \"\")"
+        copy_and_fixup_bundle (${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.app \
+            ${CMAKE_INSTALL_PREFIX}/${MACOSX_BUNDLE_BUNDLE_NAME}.app \"\" \"\")
+        message (STATUS \"Running ${Qt6_TOOL_PATH} command...\")
+        execute_process (
+            COMMAND ${Qt6_TOOL_PATH} ${MACOSX_BUNDLE_BUNDLE_NAME}.app \
+                    -always-overwrite
+            WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX})"
         COMPONENT Runtime
     )
+    install(
+        CODE "
+        message (STATUS \"Running ${Qt6_TOOL_PATH} command...\")
+        execute_process (
+            COMMAND ${Qt6_TOOL_PATH} ${MACOSX_BUNDLE_BUNDLE_NAME}.app \
+                -always-overwrite -dmg
+            WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX})
+    ")
 else()
     add_executable (chain ${chain_SOURCES})
     install (TARGETS chain DESTINATION ${CMAKE_INSTALL_PREFIX})
