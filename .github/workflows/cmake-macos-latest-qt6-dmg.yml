@@ -59,12 +59,29 @@ jobs:
           name: daisychain-macos-latest-build
           path: /tmp/DaisyChain.dmg
 
+      # Overwrite 'macos-latest' tag
+      - name: Delete existing release and tag
+        run: |
+          release_id=$(curl -s \
+            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/macos-latest" | jq -r .id)
+          
+          if [ "$release_id" != "null" ]; then
+            echo "Deleting release with id: $release_id"
+            curl -X DELETE \
+              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              "https://api.github.com/repos/${{ github.repository }}/releases/$release_id"
+          
+            echo "Deleting tag: macos-latest"
+            git push origin --delete macos-latest
+          fi
+
       # Create release
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: latest
+          tag_name: macos-latest
           release_name: Latest Artifacts
           draft: false
           prerelease: false
