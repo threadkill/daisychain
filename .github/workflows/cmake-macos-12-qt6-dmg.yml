@@ -52,9 +52,30 @@ jobs:
           cd build
           cmake --install .
 
-      # Optionally, upload build artifacts
+      # Upload build artifacts
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: daisychain-macos-12-build
           path: /tmp/DaisyChain.dmg
+
+      # Create release
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: latest
+          release_name: Latest Artifacts
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Upload release
+      - name: Upload Artifact to Release
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: /tmp
+          asset_name: daisychain-macos-12-build.zip
+          asset_content_type: application/zip
