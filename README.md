@@ -1,5 +1,6 @@
+<p align="right"><img align="right" src="docs/daisychain.png" /></p>
+
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
-<p align="center"><img align="center" src="docs/daisychain.png" /></p>
 
 #### Contents:
 
@@ -10,6 +11,7 @@
 5. [Development](#development)
 6. [daisy --help](#daisyhelp)
 
+<br/>
 <br/>
 
 ## What?<a id='what'></a>
