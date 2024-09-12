@@ -76,6 +76,6 @@ jobs:
         uses: actions/upload-release-asset@v1
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /tmp
+          asset_path: /tmp/
           asset_name: daisychain-macos-12-build.zip
           asset_content_type: application/zip
