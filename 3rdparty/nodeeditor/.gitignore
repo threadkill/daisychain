@@ -1,0 +1,7 @@
+*.pyc
+CMakeLists.txt.user
+
+build*/
+.vscode/
+
+tags

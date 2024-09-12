@@ -1,0 +1,208 @@
+// DaisyChain - a node-based dependency graph for file processing.
+// Copyright (C) 2015  Stephen J. Parker
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+#include "filternode.h"
+#include <fnmatch.h>
+#include <regex>
+#include <utility>
+
+
+#if defined(__APPLE__)
+#define FNM_EXTMATCH 0
+#endif // if defined(__APPLE__)
+
+
+namespace daisychain {
+using namespace std;
+
+
+FilterNode::FilterNode() :
+    Node(),
+    regex_ (false), invert_ (false)
+{
+    type_ = DaisyNodeType::DC_FILTER;
+    set_name (DaisyNodeNameByType[type_]);
+}
+
+
+FilterNode::FilterNode (string filter, bool is_regex = false, bool negate = false) :
+    Node(),
+    filter_ (std::move (filter)),
+    regex_ (is_regex),
+    invert_ (negate)
+{
+    type_ = DaisyNodeType::DC_FILTER;
+    set_name (DaisyNodeNameByType[type_]);
+}
+
+
+void
+FilterNode::Initialize (json& keydata, bool keep_uuid)
+{
+    Node::Initialize (keydata, keep_uuid);
+
+    json::iterator jit = keydata.begin();
+    const auto& uuid = jit.key();
+    auto data = keydata[uuid];
+
+    set_filter (data["filter"]);
+    set_regex (data["regex"]);
+
+    if (data.count ("negate")) {
+        set_invert (data["negate"]);
+    }
+}
+
+
+bool
+FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
+{
+    LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << name_;
+
+    std::regex expr;
+
+    if (regex_) {
+        try {
+            expr = std::regex (filter_);
+        }
+        catch (const std::regex_error& e) {
+            LERROR << "regex_error caught: " << e.what();
+            OpenOutputs (sandbox);
+            WriteOutputs ("EOF");
+            CloseOutputs();
+
+            return false;
+        }
+    }
+
+    if (isroot_) {
+        for (auto& input : inputs) {
+            bool match = false;
+
+            if (regex_) {
+                match = std::regex_match (input, expr);
+            }
+            else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
+                match = true;
+            }
+
+            if ((match && !invert_) || (!match && invert_)) {
+                OpenOutputs (sandbox);
+                WriteOutputs (input);
+                CloseOutputs();
+            }
+        }
+    }
+    else {
+        while (eofs_ <= fd_in_.size()) {
+            for (auto& input : inputs) {
+                if (input != "EOF") {
+                    bool match = false;
+
+                    if (regex_) {
+                        match = std::regex_match (input, expr);
+                    }
+                    else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH)
+                             == 0) {
+                        match = true;
+                    }
+
+                    if ((match && !invert_) || (!match && invert_)) {
+                        OpenOutputs (sandbox);
+                        WriteOutputs (input);
+                        CloseOutputs();
+                    }
+                }
+            }
+
+            inputs.clear();
+
+            if (eofs_ == fd_in_.size()) {
+                break;
+            }
+            else {
+                ReadInputs (inputs);
+            }
+        }
+
+        CloseInputs();
+    }
+
+    // all processing is done for this node. Send EOF downstream.
+    OpenOutputs (sandbox);
+    WriteOutputs ("EOF");
+    CloseOutputs();
+    Stats();
+
+    return true;
+} // FilterNode::Execute
+
+
+json
+FilterNode::Serialize()
+{
+    auto json_ = Node::Serialize();
+    json_[id_]["filter"] = filter_;
+    json_[id_]["regex"] = regex_;
+    json_[id_]["negate"] = invert_;
+
+    if (size_ != std::pair<int, int>(0,0)) {json_[id_]["size"] = size_;}
+
+    return json_;
+} // FilterNode::Serialize
+
+
+void
+FilterNode::set_regex (bool is_regex)
+{
+    regex_ = is_regex;
+} // FilterNode::set_regex
+
+
+bool
+FilterNode::regex() const
+{
+    return regex_;
+} // FilterNode::regex
+
+
+void
+FilterNode::set_invert (bool invert)
+{
+    invert_ = invert;
+} // FilterNode::set_invert
+
+
+bool
+FilterNode::invert() const
+{
+    return invert_;
+} // FilterNode::invert
+
+
+void
+FilterNode::set_filter (const string& filter)
+{
+    filter_ = filter;
+} // FilterNode::set_filter
+
+
+string
+FilterNode::filter()
+{
+    return filter_;
+} // FilterNode::filter
+} // namespace daisychain

@@ -1,0 +1,15 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+    <qresource>
+        <file>daisy_alpha.png</file>
+        <file>daisy_alpha_24.png</file>
+        <file>folder.svg</file>
+        <file>MesloLGS NF Bold.ttf</file>
+        <file>MesloLGS NF Bold Italic.ttf</file>
+        <file>MesloLGS NF Italic.ttf</file>
+        <file>MesloLGS NF Regular.ttf</file>
+        <file>close.png</file>
+        <file>close_hover.png</file>
+        <file>stop.png</file>
+    </qresource>
+</RCC>
