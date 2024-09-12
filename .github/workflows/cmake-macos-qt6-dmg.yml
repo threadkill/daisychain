@@ -9,7 +9,8 @@ on:
   
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
-  BUILD_TYPE: Release  
+  BUILD_TYPE: Release
+  ACTIONS_ALLOW_UNSECURE_COMMANDS: 1
 
 jobs:
   build:
@@ -18,7 +19,7 @@ jobs:
     steps:
       # Checkout the repository
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # Install dependencies (Homebrew and Qt6)
       - name: Install Homebrew
@@ -54,7 +55,7 @@ jobs:
 
       # Optionally, upload build artifacts
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: macos-build
           path: /tmp/DaisyChain.dmg
