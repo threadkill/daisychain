@@ -10,7 +10,6 @@ on:
 env:
   # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
-  ACTIONS_ALLOW_UNSECURE_COMMANDS: 1
 
 jobs:
   build:
@@ -30,9 +29,9 @@ jobs:
         run: |
           brew update
           brew install qt@6
-          echo "::add-path::$(brew --prefix qt@6)/bin"
-          echo "::add-path::$(brew --prefix qt@6)/lib"
-          echo "::add-path::$(brew --prefix qt@6)/include"
+          echo "$(brew --prefix qt@6)/bin" >> $GITHUB_PATH
+          echo "$(brew --prefix qt@6)/lib" >> $GITHUB_PATH
+          echo "$(brew --prefix qt@6)/include" >> $GITHUB_PATH
 
       # Configure the build (Assuming CMake project)
       - name: Configure CMake
