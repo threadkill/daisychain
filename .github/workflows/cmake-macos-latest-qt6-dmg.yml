@@ -1,0 +1,60 @@
+name: macOS Qt6 Build
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+  workflow_dispatch:  # Allows manual trigger from GitHub UI
+  
+env:
+  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Install dependencies (Homebrew and Qt6)
+      - name: Install Homebrew
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+      
+      - name: Install Qt6 via Homebrew
+        run: |
+          brew update
+          brew install qt@6
+          echo "$(brew --prefix qt@6)/bin" >> $GITHUB_PATH
+          echo "$(brew --prefix qt@6)/lib" >> $GITHUB_PATH
+          echo "$(brew --prefix qt@6)/include" >> $GITHUB_PATH
+
+      # Configure the build (Assuming CMake project)
+      - name: Configure CMake
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_INSTALL_PREFIX=/tmp/ -DCMAKE_PREFIX_PATH=$(brew --prefix qt@6)
+
+      # Build the project
+      - name: Build
+        run: |
+          cd build
+          cmake --build . -- -j$(sysctl -n hw.ncpu)
+          
+      # Install the project
+      - name: Install
+        run: |
+          cd build
+          cmake --install .
+
+      # Optionally, upload build artifacts
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-build
+          path: /tmp/DaisyChain.dmg
