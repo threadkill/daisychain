@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: |
           cd build
-          cmake --build . -- -j$(nproc)
+          cmake --build . -- -j$(sysctl -n hw.ncpu)
           
       # Install the project
       - name: Install
