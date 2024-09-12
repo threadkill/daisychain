@@ -1,19 +1,20 @@
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
 <p align="center"><img align="center" src="docs/daisychain.png" /></p>
-## Contents:
-* [What?](#what)
-* [Why?](#why)
-* [How?](#how)
-* [Building](#building)
-* [Development](#development)
-* [daisy --help](#daisyhelp)
-__________________________________________________________________
 
-## What? {#what}
+#### Contents:
 
-DaisyChain is a node-based dependency graph for file processing. In addition to command-line support, a GUI application
-is provided for executing scripts and programs without the need to interact with a terminal. The GUI supports drag-n-drop
-for files (*both graphs and file inputs*). Nodes in the graph can be executed in serial or parallel.
+1. [What?](#what)
+2. [Why?](#why)
+3. [How?](#how)
+4. [Building](#building)
+5. [Development](#development)
+6. [daisy --help](#daisyhelp)
+
+<br/>
+
+## What?<a id='what'></a>
+
+DaisyChain is a node-based dependency graph for executing programs which typically involve file processing. In addition to command-line support, a GUI application can be used for executing scripts and programs without the need to interact with a terminal. The GUI supports drag-n-drop for files (*both graphs and file inputs*). Nodes in the graph can be executed in serial or parallel.
 
 The project consists of the following components:
 
@@ -24,31 +25,24 @@ The project consists of the following components:
 
 [^1]: *the NodeEditor project used by DaisyChain __IS__ a data flow graph.*
 
-DaisyChain is __not__ a data flow graph[^1] and simply passes string tokens along to nodes. Executables run by the graph are
-__not__ required to support UNIX pipeline semantics (e.g. read stdin, write stdout). The graph functions like xargs in that
-regard. However, standard output can be captured and used as input.
+DaisyChain is __not__ a data flow graph[^1] and simply passes string tokens along to nodes. Executables run by the graph are __not__ required to support UNIX pipeline semantics (e.g. read stdin, write stdout). The graph functions like __xargs__ in that regard. However, standard output can be captured and used as input.
 
-## Why? {#why}
+<br/>
 
-Three (3) main use cases:
+## Why?<a id='why'></a>
 
-1. *Batch processing* files typically requires writing the same type of boilerplate code in a scripting language over and over
-again (*i.e. option flags, loops constructs, exec calls to other applications, I/O handling, signal handling, etc*).
-DaisyChain replaces that process with a framework that controls the order of execution, **and provides a means to
-parallelize processes.**
+1. *Batch processing* files typically requires writing the same type of boilerplate code in a scripting language over and over again (*i.e. option flags, loops constructs, exec calls to other applications, I/O handling, signal handling, etc*). DaisyChain replaces that process with a framework that controls the order of execution, **and provides a means to parallelize processes.**
 2. *Running scripts* requires some working knowledge of a terminal and shell syntax. DaisyChain encapsulates that
 process in a GUI application which does not require terminal interaction by users.
-3. DaisyChain makes it easier to *distribute command-line tools*.
+3. It's easier to *distribute command-line tools* by encapsulating them in a graph along with their parameters.
 
-## How? {#how}
+<br/>
 
-DaisyChain uses a DAG to control the order of operations. Nodes in the graph read inputs, do some processing,
-and then write the outputs. Inputs are typically file paths but could be any string token (*e.g. a range of numbers*).
-A node will execute a process once per token until all tokens have been received. Tokens can be modified as they
-pass through the graph.
+## How?<a id='how'></a>
 
-Every node runs as a child process (*via fork()*). All synchronization between nodes is handled using named pipes and
-multiplexed I/O. This allows processes to run in parallel.
+DaisyChain uses a directed-acyclic-graph (DAG) to control the order of operations. Nodes in the graph read inputs, do some processing, and then write the outputs. Inputs are typically file paths but could be any string token (e.g. a range of numbers). A node will execute a process once per token until all tokens have been received. Tokens can be modified as they pass through the graph.
+
+Every node runs as a child process (*via fork()*). All synchronization between nodes is handled using named pipes and multiplexed I/O. This allows processes to run in parallel.
 
 Graphs are stored as JSON in a *.dcg file.
 
@@ -64,23 +58,18 @@ The current set of executable nodes includes:
 __Options__ are passed to nodes via variables that can be set in the __Variables__ panel in
 the GUI or set using flags from the command-line tool.
 
-__Processing__ happens one string token at a time. Nodes loop over tokens and execute once
-per token. This behavior can be changed by checking the __`batch`__ checkbox (*when a node supports it*);
-in which case a node will __block__ until it has received all inputs which are then concatenated into one large
-string and set as the input for the node.
+__Processing__ happens one string token at a time. Nodes loop over tokens and execute once per token. This behavior can be changed by checking the __`batch`__ checkbox (*when a node supports it*); in which case, a node will __block__ until it has received all inputs which are then concatenated into one large string and set as the input for the node.
 
-__Parallel processing__ can be achieved by duplicating a set of nodes and using a __`distro`__ node
-to distribute tokens across each group of nodes. This would typically be followed by using a __`concat`__
-node to bring the inputs back into a single stream.
+__Parallel processing__ can be achieved by duplicating a set of nodes and using a __`distro`__ node to distribute tokens across each group of nodes. This would typically be followed by using a __`concat`__ node to bring the inputs back into a single stream.
 
 __I/O__ from node to node are string tokens represented by the ```${INPUT}``` and ```${OUTPUT}``` variables.
-The ```${OUTPUT}``` variable is automatically set equal to the ```${INPUT}``` variable. This leaves the string token
-intact as it passes through the graph. However, the ```${OUTPUT}``` variable can be changed via shell string
+The ```${OUTPUT}``` variable is automatically set equal to the ```${INPUT}``` variable. This leaves the string token intact as it passes through the graph. However, the ```${OUTPUT}``` variable can be changed via shell string
 substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Additionally, for CommandLine nodes,
 ```${OUTPUT}``` can be set to ```${STDOUT}```.
 
-_____________________________________________________________
-## Building {#building}
+<br/>
+
+## Building<a id='building'></a>
 
 The project was primarily developed for __MacOS__ and __Linux__.
 
@@ -89,7 +78,7 @@ using __WSL2__ (*e.g. Ubuntu*). This may require building Qt5.15 manually depend
 limited testing has been done on WSL2. For best performance, make sure all working files are located on the Linux
 file system.
 
-### Requirements
+#### Requirements
 
 The project attempts to leverage as many existing technologies as possible without creating too many run-time
 dependencies. Most dependencies are included in the project as git submodules. It is *highly* recommended to use
@@ -112,7 +101,7 @@ GUI Dependencies:
 * [Qt6](https://www.qt.io/product/framework) (not included as a git submodule)
 * [NodeEditor](https://github.com/paceholder/nodeeditor)
 
-### CMake
+#### CMake
 
 1. ```git clone git@bitbucket.org:sjparker/daisychain.git```
 2. ```cd daisychain && git submodule update --init --recursive```
@@ -122,7 +111,7 @@ GUI Dependencies:
 
 	*individual build targets:* __*daisy, chain, libdaisychain, pydaisychain*__
 
-### Autotools
+#### Autotools
 
 *The configure scripts currently only support building the library (__libdaisychain__) and the command-line application (__daisy__). When building the GUI application (chain) or the python bindings (pydaisychain), use the CMake buildscripts.*
 
@@ -135,17 +124,18 @@ GUI Dependencies:
 
 	*individual build targets:* __*daisy, libdaisychain*__
     
-#### *Notes*
+##### *Notes*
 
 * *There are no run-time dependencies for `libdaisychain` or `daisy`; all dependencies are header-only.*
 * *If Qt6 is not found, set `CMAKE_PREFIX_PATH` on the CMake command-line to the root of your Qt6 installation (e.g. ```-DCMAKE_PREFIX_PATH=<Qt6_Root>/<arch>```).*
 * *Qt6 is not linked to by the commandline tool `daisy` and does not need to be present on a server or headless environment.*
 * *[NodeEditor](https://github.com/paceholder/nodeeditor) is used to create nodes and establish connections. Data flow functionality is not used.*
- 
-_____________________________________________________________
-## Development {#development}
 
-### Debugging
+<br/>
+
+## Development<a id='development'></a>
+
+#### Debugging
 Debugging forked processes can be challenging and typically requires a debugger that can follow forks. The graph uses an
 initial fork to establish the process leader for the group and subsequent forks for each node in the graph. This is how tasks
 are parallelized and facilitates signal processing via process group.
@@ -156,17 +146,19 @@ print the __pid__ for the node. You can then attach the debugger to that process
 ```wait``` variable to ```false```, and continue by stepping. Wrap the ```m_debug_wait()``` call in an ```if``` statement against the
 node name to be sure you're in the exact node you're trying to debug.
 
-#### Example
-<p style="text-align: center;">
+##### Example
+
 ```c++
     if (name_ == "Command1")
         m_debug_wait(true);
 ```
-</p>
 
-_____________________________________________________________
-## daisy --help {#daisyhelp}
 <br/>
+
+## daisy --help<a id='daisyhelp'></a>
+
+<br/>
+
 ```text
 DaisyChain - node-based dependency graph for file processing.
    
