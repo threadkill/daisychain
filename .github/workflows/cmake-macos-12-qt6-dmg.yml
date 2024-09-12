@@ -1,4 +1,4 @@
-name: macOS Qt6 Build
+name: macOS-12 Qt6 Build
 
 on:
   push:
