@@ -1,3 +1,4 @@
+[![macOS Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-qt6-dmg.yml)
 <p align="right"><img align="right" src="docs/daisychain.png" /></p>
 
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
