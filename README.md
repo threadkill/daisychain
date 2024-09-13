@@ -31,7 +31,7 @@ The project consists of the following components:
 
 [^1]: *the NodeEditor project used by DaisyChain __IS__ a data flow graph.*
 
-DaisyChain is __not__ a data flow graph[^1] and simply passes string tokens along to nodes. Executables run by the graph are __not__ required to support UNIX pipeline semantics (e.g. read stdin, write stdout). The graph functions like __xargs__ in that regard. However, standard output can be captured and used as input.
+DaisyChain is __not__ a data flow graph[^1] and simply passes string tokens along to nodes. Executables run by the graph are __not__ required to support UNIX pipeline semantics (e.g. read stdin, write stdout). The graph functions like [xargs](https://www.man7.org/linux/man-pages/man1/xargs.1.html#EXAMPLES) in that regard. However, standard output can be captured and used as input.
 
 <br/>
 
