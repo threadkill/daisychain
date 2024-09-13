@@ -1,8 +1,9 @@
 [![macOS-latest Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml)
 [![macOS-12 Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-12-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-12-qt6-dmg.yml)
-<p align="right"><img align="right" src="docs/daisychain.png" /></p>
 
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
+
+<p align="right"><img align="right" src="docs/daisychain.png" width=400px /></p>
 
 #### Contents:
 
@@ -77,10 +78,7 @@ substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Add
 
 The project was primarily developed for __MacOS__ and __Linux__.
 
-It is possible to build on __Windows 11__
-using __WSL2__ (*e.g. Ubuntu*). This may require building Qt5.15 manually depending on the distribution used. Very
-limited testing has been done on WSL2. For best performance, make sure all working files are located on the Linux
-file system.
+It is possible to build on __Windows 10/11__ using __WSL2__ (*e.g. Debian*). Very limited testing has been done on WSL2. For best performance, make sure all working files are located on the Linux file system (e.g. *NOT* `/mnt/c`). At a minimum, these packages are needed: `git`, `gcc`, `cmake`, `qt6`, `qt6-base-dev`, `qt6-base-dev-tools`, `python3-dev`, `libxkbcommon-dev`.
 
 #### Requirements
 
