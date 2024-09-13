@@ -10,9 +10,10 @@
 1. [What?](#what)
 2. [Why?](#why)
 3. [How?](#how)
-4. [Building](#building)
-5. [Development](#development)
-6. [daisy --help](#daisyhelp)
+4. [Downloads](#downloads)
+5. [Building](#building)
+6. [Development](#development)
+7. [daisy --help](#daisyhelp)
 
 <br/>
 <br/>
@@ -74,11 +75,18 @@ substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Add
 
 <br/>
 
+## Downloads
+
+The only automated builds currently available are for macOS. [macOS-13+(arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain.dmg) 
+ and [macOS-12 (x86_64)](https://github.com/threadkill/daisychain/releases/download/macos-12/DaisyChain.dmg)
+
+<br/> 
+
 ## Building<a id='building'></a>
 
-The project was primarily developed for __MacOS__ and __Linux__.
+The project was primarily developed for __macOS__ and __Linux__.
 
-It is possible to build on __Windows 10/11__ using __WSL2__ (*e.g. Debian*). Very limited testing has been done on WSL2. For best performance, make sure all working files are located on the Linux file system (e.g. *NOT* `/mnt/c`). At a minimum, these packages are needed: `git`, `gcc`, `cmake`, `qt6`, `qt6-base-dev`, `qt6-base-dev-tools`, `python3-dev`, `libxkbcommon-dev`.
+It is possible to build on __Windows 10/11__ using __WSL2__ (*e.g. Debian*) but very limited testing has been done. For best performance, make sure all working files are located on the Linux file system (e.g. *NOT* `/mnt/c`). At a minimum, these packages are needed: `git`, `gcc`, `cmake`, `qt6`, `qt6-base-dev`, `qt6-base-dev-tools`, `python3-dev`, `libxkbcommon-dev`.
 
 #### Requirements
 
