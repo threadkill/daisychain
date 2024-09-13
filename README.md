@@ -3,7 +3,7 @@
 
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
 
-<p align="right"><img align="right" src="docs/daisychain.png" width=400px /></p>
+<p align="right"><a href="docs/daisychain.png"><img align="right" src="docs/daisychain_sm.png" width=400px /></a></p>
 
 #### Contents:
 
