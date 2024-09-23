@@ -16,7 +16,11 @@
 
 #pragma once
 
+#ifdef _WIN32
+#include "node_win.h"
+#else
 #include "node.h"
+#endif
 
 
 namespace daisychain {
@@ -55,5 +59,9 @@ private:
     int notify_fd_ = 0;
 
     bool passthru_;
+
+#ifdef _WIN32
+    HANDLE handle_;
+#endif
 };
 } // namespace daisychain

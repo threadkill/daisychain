@@ -23,9 +23,13 @@
 #include <iterator>
 #include <algorithm>
 #include <random>
-
+#ifndef _WIN32
 #include <unistd.h>
-#include <csignal>
+#else
+#include "utils_win.h"
+#endif
+
+
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::ordered_json;
@@ -126,23 +130,6 @@ m_split_input (const std::string& input,
 } // m_split_input
 
 
-// This is for debugging nodes running in child processes.
-inline void
-m_debug_wait (bool dowait = false)
-{
-#ifndef NDEBUG
-    if (dowait) {
-        std::cout << "attach to pid " << getpid() << std::endl;
-
-        while (dowait)
-            ; // set dowait=false in debugger to continue.
-
-        //raise (SIGTRAP);
-    }
-#endif // ifndef NDEBUG
-} // m_debug_wait
-
-
 inline int
 m_is_numeric (const std::string& input)
 {
@@ -214,3 +201,88 @@ m_gen_uuid()
 
     return ss.str();
 }
+
+
+#if defined(_WIN32)
+#include <windows.h>
+inline std::string
+m_get_thread_name()
+{
+    PWSTR threadname = nullptr;
+    HRESULT hr = GetThreadDescription (GetCurrentThread(), &threadname);
+    if (FAILED (hr)) {
+        return "noname";
+    }
+    auto name = wchar2string (threadname);
+    LocalFree (threadname); // Free the allocated memory
+
+    return name;
+}
+#elif defined(__linux__) || defined(__APPLE__)
+inline std::string
+m_get_thread_name()
+{
+    char name[16]; // Maximum 16 characters, as per pthread_setname_np limits
+    int result = pthread_getname_np (pthread_self(), name, sizeof (name));
+    if (result != 0) {
+        return "noname";
+    }
+    return std::string (name);
+}
+#endif
+
+
+#if defined(_WIN32)
+#include <windows.h>
+inline void
+m_set_thread_name (const std::string& name)
+{
+    HRESULT hr = SetThreadDescription(GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str());
+    if (FAILED(hr)) {
+        std::cerr << "Failed to set thread description" << std::endl;
+    }
+}
+#elif defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+inline void
+m_set_thread_name (const std::string& name)
+{
+    pthread_setname_np(pthread_self(), name.c_str());
+}
+#else
+inline void
+m_set_thread_name (const std::string& name)
+{
+    // No-op on unsupported platforms
+}
+#endif
+
+
+inline std::string
+m_get_thread_id()
+{
+    std::ostringstream oss;
+    oss << std::this_thread::get_id();
+    return oss.str();
+}
+
+
+// This is for debugging nodes running in child processes.
+inline void
+m_debug_wait (bool dowait = false)
+{
+    if (dowait) {
+#ifdef _WIN32
+        std::cout << "attach to thread id " << m_get_thread_id() << std::endl;
+#else
+        std::cout << "attach to pid " << getpid() << std::endl;
+#endif
+
+        while (dowait)
+            ; // set dowait=false in debugger to continue.
+
+        //raise (SIGTRAP);
+    }
+} // m_debug_wait
+
+

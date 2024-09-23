@@ -33,7 +33,6 @@ bool
 FileListNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 {
     LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << name_;
-    m_debug_wait();
 
     if (isroot_) {
         for (auto& input : inputs) {

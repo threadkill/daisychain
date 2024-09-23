@@ -15,7 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "filternode.h"
+#ifdef _WIN32
+#include <shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
+#else
 #include <fnmatch.h>
+#endif
 #include <regex>
 #include <utility>
 
@@ -89,20 +94,29 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     }
 
     if (isroot_) {
+        LDEBUG << "Root: " << name_;
         for (auto& input : inputs) {
             bool match = false;
 
             if (regex_) {
                 match = std::regex_match (input, expr);
             }
+#ifdef _WIN32
+            else if (PathMatchSpec (filter_.c_str(), input.c_str())) {
+#else
             else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
+#endif
                 match = true;
             }
 
             if ((match && !invert_) || (!match && invert_)) {
+                LDEBUG << "Matched: " << input;
                 OpenOutputs (sandbox);
                 WriteOutputs (input);
                 CloseOutputs();
+            }
+            else {
+                LDEBUG << "No Match." << input;
             }
         }
     }
@@ -115,15 +129,22 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                     if (regex_) {
                         match = std::regex_match (input, expr);
                     }
-                    else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH)
-                             == 0) {
+#ifdef _WIN32
+                    else if (PathMatchSpec (filter_.c_str(), input.c_str())) {
+#else
+                    else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
+#endif
                         match = true;
                     }
 
                     if ((match && !invert_) || (!match && invert_)) {
+                        LDEBUG << "Matched: " << input;
                         OpenOutputs (sandbox);
                         WriteOutputs (input);
                         CloseOutputs();
+                    }
+                    else {
+                        LDEBUG << "No Match." << input;
                     }
                 }
             }

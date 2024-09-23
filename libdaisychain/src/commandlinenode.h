@@ -16,7 +16,11 @@
 
 #pragma once
 
+#ifdef _WIN32
+#include "node_win.h"
+#else
 #include "node.h"
+#endif
 
 
 namespace daisychain {

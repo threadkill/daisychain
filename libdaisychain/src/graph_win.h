@@ -23,12 +23,11 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <sys/wait.h>
 #include <stack>
 #include <set>
 
 #include "logger.h"
-#include "node.h"
+#include "node_win.h"
 #include "signalhandler.h"
 #include "commandlinenode.h"
 #include "concatnode.h"
@@ -143,22 +142,8 @@ private:
     list<Edge> edges_;
     std::unordered_map<string, vector<string>> adjacencylist_;
     vector<string> ordered_;
-
-    pid_t process_group_{};
-
-
-    static inline void wait_ (pid_t pid = -1)
-    {
-        pid_t wpid;
-        int status = 0;
-        while ((wpid = waitpid (pid, &status, 0)) > 0);
-        if (WIFSIGNALED (status)) {
-            LWARN << "Process terminated via signal.";
-        }
-        else if (!WIFEXITED (status)) {
-            LERROR << "Process failed (non-zero exit()). " << wpid;
-        }
-    }
+    vector<thread> threads_;
+    vector<HANDLE> handles_;
 
 
     void sort_visitor_ (const string& v, std::set<string>& visited, std::stack<string>& stacked)

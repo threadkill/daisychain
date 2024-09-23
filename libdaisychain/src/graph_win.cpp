@@ -14,11 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "graph.h"
-#include <ftw.h>
+#include <windows.h>
+#include <tchar.h>
 #include <iomanip>
 #include <sys/stat.h>
+#include <semaphore>
 
+#include "graph_win.h"
+#include "utils_win.h"
 
 namespace daisychain {
 
@@ -54,7 +57,6 @@ Graph::Initialize (const string& filename)
     edges_.clear();
     ordered_.clear();
     adjacencylist_.clear();
-    process_group_ = 0;
 
     if (!filename_.empty()) {
         LINFO <<  "Initializing graph from file: " << filename_;
@@ -190,8 +192,8 @@ Graph::PrepareFileSystem()
     struct stat ss{};
 
     if (sandbox_.empty()) {
-        char temp[] = "/tmp/daisy-XXXXXX";
-        sandbox_ = mkdtemp (temp);
+        char temp[] = "daisy-XXXXXX";
+        sandbox_ = mkdtemp_ (temp);
 
         if (sandbox_.empty()) {
             LERROR << "Temp directory creation failed.";
@@ -199,29 +201,40 @@ Graph::PrepareFileSystem()
         }
     }
     else if (stat (sandbox_.c_str(), &ss) != 0) {
-        int ret = mkdir (sandbox_.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-
-        if (ret != 0) {
+        if (auto ret = CreateDirectory (sandbox_.c_str(), nullptr); !ret) {
             LERROR << "Cannot create directory: " + sandbox_;
             status = false;
         }
     }
 
-    if (status) {
-        for (const auto& edge : edges_) {
-            std::string filepath = sandbox_ + "/" + edge.first + "." + edge.second;
+    /*
+    for (const auto& [parent, child] : edges_) {
+        std::string pipePath = Node::get_pipename (sandbox_, parent + "." + child);
 
-            if (stat (filepath.c_str(), &ss) != 0) {
-                int ret = mkfifo (filepath.c_str(), S_IRUSR | S_IWUSR | S_IWGRP);
+        SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
 
-                if (ret != 0) {
-                    LERROR << "Cannot create FIFO: " + filepath;
-                    status = false;
-                }
-            }
+        // Create a named pipe with duplex communication
+        HANDLE hPipe = CreateNamedPipeA(
+            pipePath.c_str(),             // Pipe name
+            PIPE_ACCESS_DUPLEX,           // Read/Write access
+            PIPE_TYPE_BYTE |              // Byte-type pipe
+            PIPE_READMODE_BYTE |          // Byte read mode
+            PIPE_WAIT,                    // Blocking mode
+            1,                            // Max. instances (since one thread per pipe)
+            8192,                         // Output buffer size
+            8192,                         // Input buffer size
+            0,                            // Default time-out
+            &sa);         // Default security attributes
+
+        if (hPipe == INVALID_HANDLE_VALUE) {
+            std::cerr << "Error creating named pipe " << pipePath
+                      << ". GLE=" << GetLastError() << std::endl;
+            continue;
         }
-    }
 
+        handles_.push_back (hPipe);
+    }
+        */
     return status;
 } // Graph::PrepareFileSystem
 
@@ -244,7 +257,7 @@ bool
 Graph::Execute (const string& input, json& env)
 {
     TIMED_FUNC (timerObj);
-    setbuf (stdout, nullptr);
+    //setbuf (stdout, nullptr);
 
     if (!PrepareFileSystem()) {
         return false;
@@ -261,76 +274,53 @@ Graph::Execute (const string& input, json& env)
 
     sort_();
 
-    process_group_ = 0;
     running_ = true;
 
-    pid_t group_pid = fork();
-
-    if (group_pid == 0) {
-        // Process leader for the group.
-        LDEBUG << "Order of execution:";
-        for (const auto& uuid : ordered_) {
-            LDEBUG << uuid << " - " << nodes_[uuid]->name();
-        }
-        for (const auto& uuid : ordered_) {
-
-            // Create child processes in a loop.
-            pid_t child_pid = fork();
-
-            switch (child_pid) {
-            case -1: // fork() failed.
-                LERROR << "Exit ... (" << child_pid << ")";
-                ::_exit (child_pid);
-            case 0: // the child of the fork()
-            {
-                // get parent's pid.
-                auto ppid_ = getppid();
-                // set process group ID to parent's pid.
-                auto result = setpgid (0, ppid_);
-                LERROR_IF (result != 0) << "Set Process Group ID failed. (" << result << ")";
-
-                bool stat = false;
-
-                if (nodes_[uuid]->is_root()) {
-                    // root nodes receive initial input.
-                    stat = nodes_[uuid]->Execute (inputs, sandbox_, merged_env);
-                }
-                else {
-                    stat = nodes_[uuid]->Execute (sandbox_, merged_env);
-                }
-
-                LINFO_IF (stat) << "<" << nodes_[uuid]->name() << "> Finished.";
-                LERROR_IF (!stat) << "<" << nodes_[uuid]->name() << "> Failed.";
-
-                ::_exit (stat ? 0 : -1);
-            }
-            default: // parent of the fork();
-                LDEBUG << "<" << nodes_[uuid]->name() << "> fork (pid:" << child_pid << ")";
-                break;
-            } // switch
-        }
-
-        wait_();
-        ::_exit (0);
-    }
-    else if (group_pid > 0) {
-        // set process group ID for parent process.
-        auto result = setpgid (group_pid, group_pid);
-        LERROR_IF (result != 0) << "Set Process Group ID failed. (" << result << ")";
-        LDEBUG_IF (result == 0) << "Process Group ID:" << group_pid;
-        process_group_ = group_pid;
-
-        // CTRL-C
-        sigint_handler = [&] (int signal) { Terminate(); };
-        signal (SIGINT, signal_handler);
+    // Process leader for the group.
+    LDEBUG << "Order of execution:";
+    for (const auto& uuid : ordered_) {
+        LDEBUG << uuid << " - " << nodes_[uuid]->name();
     }
 
-    // Waiting on first fork.
-    wait_ (group_pid);
+    for (const auto& uuid : ordered_) {
+        auto node_ = nodes_[uuid];
+        if (node_->is_root()) {
+            LDEBUG << "Root node: " << node_->name();
+            // root nodes receive initial input.
+            threads_.emplace_back (
+                [this, &node_, &inputs, &merged_env]() {
+                    bool stat = node_->Execute (inputs, sandbox_, merged_env);
+                    LINFO_IF (stat) << "<" << node_->name() << "> Finished.";
+                    LERROR_IF (!stat) << "<" << node_->name() << "> Failed.";
+                }
+            );
+        }
+        else {
+            threads_.emplace_back (
+                [this, &node_, &merged_env]() {
+                    bool stat = node_->Execute (sandbox_, merged_env);
+                    LINFO_IF (stat) << "<" << node_->name() << "> Finished.";
+                    LERROR_IF (!stat) << "<" << node_->name() << "> Failed.";
+                }
+            );
+        }
+    }
+
+    for (auto& t_: threads_) {
+        if (t_.joinable()) {
+            t_.join();
+        }
+    }
+
+    /*
+    // CTRL-C
+    sigint_handler = [&] (int signal) { Terminate(); };
+    signal (SIGINT, signal_handler);
+    */
+
     LINFO_IF (!test_) << "Graph execution finished.";
     LINFO_IF (test_) << "Graph test finished.";
 
-    process_group_ = 0;
     running_ = false;
 
     return true;
@@ -358,34 +348,10 @@ Graph::Test()
 void
 Graph::Terminate()
 {
-    if (!process_group_ && !running_)
+    if (!running_)
         return;
 
-    auto result = killpg (process_group_, SIGTERM);
-    if (result == 0) {
-        LWARN << " !!! Terminated !!! (" << process_group_ << ")";
-        running_ = false;
-        process_group_ = 0;
-    }
-    else {
-        switch (errno) {
-        case EINVAL:
-            LERROR << "Terminate process group failed for ("
-                   << process_group_
-                   << "): Invalid signal";
-            break;
-        case EPERM:
-            LERROR << "Terminate process group failed for ("
-                   << process_group_
-                   << "): Sending user is not the super user";
-            break;
-        case ESRCH:
-            LERROR << "Terminate process group failed for ("
-                   << process_group_
-                   << "): No process can be found in the process group";
-            break;
-        }
-    }
+    //running_ = false;
 }
 
 
@@ -396,15 +362,12 @@ Graph::Cleanup()
         return true;
     }
 
-    auto rmdirtree = [] (const char* path, const struct stat* buf, int type, struct FTW* ftwb) {
-        int stat = std::remove (path);
-        stat < 0 ? LERROR << "Could not remove: " << path : LDEBUG << "Removed: " << path;
-
-        return stat < 0 ? -1 : 0;
-    };
-
-    int status = nftw (sandbox_.c_str(), rmdirtree, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
+    int status = DeleteDirectoryRecursively (sandbox_);
     status == 0 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
+
+    for (const auto handle_: handles_) {
+        CloseHandle (handle_);
+    }
 
     return status == 0;
 }

@@ -17,7 +17,11 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11_json/pybind11_json.hpp>
+#ifdef _WIN32
+#include "graph_win.h"
+#else
 #include "graph.h"
+#endif
 
 
 using namespace daisychain;
@@ -81,8 +85,8 @@ PYBIND11_MODULE (pydaisychain, m) {
         .def ("filename", &Graph::filename)
         .def ("set_sandbox", &Graph::set_sandbox)
         .def ("sandbox", &Graph::sandbox)
-        .def ("set_environ", &Graph::set_environ)
-        .def ("environ", &Graph::environ)
+        .def ("set_environment", &Graph::set_environment)
+        .def ("environment", &Graph::environment)
         .def ("set_notes", &Graph::set_notes)
         .def ("notes", &Graph::notes)
         .def ("set_input", &Graph::set_input)
