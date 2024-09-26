@@ -113,7 +113,7 @@ GUI Dependencies:
 
 #### CMake
 
-1. ```git clone git@bitbucket.org:sjparker/daisychain.git```
+1. ```git clone git@github.com:threadkill/daisychain.git```
 2. ```cd daisychain && git submodule update --init --recursive```
 3. ```mkdir build && cd build```
 4. ```cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=<install dir>```
@@ -125,7 +125,7 @@ GUI Dependencies:
 
 *The configure scripts currently only support building the library (__libdaisychain__) and the command-line application (__daisy__). When building the GUI application (chain) or the python bindings (pydaisychain), use the CMake buildscripts.*
 
-1. ```git clone git@bitbucket.org:sjparker/daisychain.git```
+1. ```git clone git@github.com:threadkill/daisychain.git```
 2. ```cd daisychain && git submodule update --init --recursive```
 3. ```./bootstrap```
 4. ```mkdir build && cd build```
