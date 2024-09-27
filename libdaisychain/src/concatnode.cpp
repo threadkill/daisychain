@@ -36,18 +36,26 @@ ConcatNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
     if (isroot_) {
         for (auto& input : inputs) {
+#ifdef _WIN32
+            WriteOutputs (input);
+#else
             OpenOutputs (sandbox);
             WriteOutputs (input);
             CloseOutputs();
+#endif
         }
     }
     else {
         while (eofs_ <= fd_in_.size()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
+#ifdef _WIN32
+                    WriteOutputs (input);
+#else
                     OpenOutputs (sandbox);
                     WriteOutputs (input);
                     CloseOutputs();
+#endif
                 }
             }
 
@@ -61,12 +69,18 @@ ConcatNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             }
         }
 
+#ifndef _WIN32
         CloseInputs();
+#endif
     }
 
+#ifdef _WIN32
+    WriteOutputs ("EOF");
+#else
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
+#endif
     Stats();
 
     return true;

@@ -80,9 +80,13 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         else {
             RemoveWatches();
 
+#ifdef _WIN32
+            WriteOutputs ("EOF");
+#else
             OpenOutputs (sandbox);
             WriteOutputs ("EOF");
             CloseOutputs();
+#endif
         }
     }
 
@@ -482,4 +486,143 @@ WatchNode::RemoveMonitor() const
 } // WatchNode::RemoveMonitor
 
 #endif // ifdef __linux__
+
+
+#ifdef _WIN32
+bool
+WatchNode::InitNotify()
+{
+    bool stat = true;
+
+    return stat;
+} // WatchNode::InitNotify
+
+
+bool
+WatchNode::Notify (const string& sandbox, const string& path)
+{
+    bool stat = true;
+
+    std::vector<string> paths;
+    paths.push_back (path);
+
+    auto fs_path = filesystem::path (path);
+    if (!is_directory (fs_path)) {
+        return false;
+    }
+
+    for (const auto& input : paths) {
+        handle_ = CreateFile(
+            input.c_str(),
+            FILE_LIST_DIRECTORY,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+            NULL,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,
+            NULL
+        );
+
+        if (handle_ == INVALID_HANDLE_VALUE) {
+            LDEBUG << "Watch failed on: " << input;
+            stat = false;
+        }
+        else if (passthru_ && is_regular_file (filesystem::path (input))) {
+            OpenOutputs (sandbox);
+            WriteOutputs (input);
+            CloseOutputs();
+        }
+    }
+
+    return stat;
+} // WatchNode::Notify
+
+
+void
+WatchNode::Monitor (const string& sandbox)
+{
+    DWORD dwBytesReturned;
+    char buffer[1024];
+    FILE_NOTIFY_INFORMATION *pNotify;
+    int offset;
+
+    while (TRUE) {
+        if (ReadDirectoryChangesW(
+                handle_,
+                buffer,
+                sizeof(buffer),
+                TRUE, // TRUE to monitor subdirectories as well
+                FILE_NOTIFY_CHANGE_FILE_NAME |
+                FILE_NOTIFY_CHANGE_DIR_NAME |
+                FILE_NOTIFY_CHANGE_ATTRIBUTES |
+                FILE_NOTIFY_CHANGE_SIZE |
+                FILE_NOTIFY_CHANGE_LAST_WRITE |
+                FILE_NOTIFY_CHANGE_CREATION,
+                &dwBytesReturned,
+                NULL,
+                NULL))
+        {
+            offset = 0;
+            bool transmit = false;
+
+            do {
+                pNotify = (FILE_NOTIFY_INFORMATION*) &buffer[offset];
+
+                switch (pNotify->Action) {
+                    case FILE_ACTION_ADDED:
+                        LDEBUG << "File added: ";
+                        transmit = true;
+                        break;
+                    case FILE_ACTION_REMOVED:
+                        LDEBUG << "File removed: ";
+                        break;
+                    case FILE_ACTION_MODIFIED:
+                        LDEBUG << "File modified: ";
+                        transmit = true;
+                        break;
+                    case FILE_ACTION_RENAMED_OLD_NAME:
+                        LDEBUG << "File renamed (old name): ";
+                        break;
+                    case FILE_ACTION_RENAMED_NEW_NAME:
+                        LDEBUG << "File renamed (new name): ";
+                        transmit = true;
+                        break;
+                    default:
+                        LDEBUG << "Unknown action: ";
+                        break;
+                }
+
+                auto filename = wchar2string (pNotify->FileName);
+                LDEBUG << filename;
+
+                if (transmit) {
+                    OpenOutputs (sandbox);
+                    WriteOutputs (filename);
+                    CloseOutputs();
+                }
+
+                offset += pNotify->NextEntryOffset;
+            } while (pNotify->NextEntryOffset != 0);
+        }
+        else {
+            LERROR << "ReadDirectoryChangesW failed with error: " << GetLastError();
+            break;
+        }
+    }
+}
+
+
+void
+WatchNode::RemoveWatches()
+{
+    CloseHandle (handle_);
+    handle_ = nullptr;
+    LDEBUG << "Removed watched file descriptors.";
+} // WatchNode::RemoveWatches
+
+
+void
+WatchNode::RemoveMonitor() const
+{
+} // WatchNode::RemoveMonitor
+#endif
 }

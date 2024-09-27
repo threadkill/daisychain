@@ -23,10 +23,9 @@
 #include <iterator>
 #include <algorithm>
 #include <random>
+#include "utils_win.h"
 #ifndef _WIN32
 #include <unistd.h>
-#else
-#include "utils_win.h"
 #endif
 
 

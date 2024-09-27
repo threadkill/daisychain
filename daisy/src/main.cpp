@@ -14,11 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#ifdef _WIN32
-#include "graph_win.h"
-#else
 #include "graph.h"
-#endif
 #include <iostream>
 #include <string>
 #include <tclap/CmdLine.h>

@@ -1,6 +1,7 @@
 
 #pragma once
 
+#ifdef _WIN32
 #include <windows.h>
 #include <string>
 #include <iostream>
@@ -138,3 +139,4 @@ wchar2string (const wchar_t* wcharStr) {
 
     return result;
 }
+#endif

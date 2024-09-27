@@ -22,10 +22,15 @@
 #include <iostream>
 #include <list>
 #include <string>
-#include <sys/poll.h>
 #include <utility>
 #include <vector>
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#else
+#include <sys/poll.h>
 #include <wordexp.h>
+#endif
 
 #include "logger.h"
 #include "utils.h"
@@ -78,15 +83,15 @@ public:
     Node() :
         id_ (m_gen_uuid()),
         type_ (DC_INVALID),
-        position_ (std::pair<float, float> (0.0, 0.0)),
+        position_ (std::pair<float, float> (0.0f, 0.0f)),
         size_ (std::pair<int, int> (0, 0)),
         isroot_ (true),
         batch_ (false),
         test_ (false),
-        eofs_ (0)
+        eofs_ (0),
+        totalbytesread_ (0),
+        totalbyteswritten_ (0)
     {
-        totalbytesread_ = 0;
-        totalbyteswritten_ = 0;
     }
 
 
@@ -137,12 +142,42 @@ public:
     }
 
 
+#ifdef _WIN32
+    void Start (const string& sandbox, json& vars)
+    {
+        thread_ = std::thread ([this, &sandbox, &vars]() {
+            auto stat = this->Execute (sandbox, vars);
+            LINFO_IF (stat) << "<" << name_ << "> Finished.";
+            LERROR_IF (!stat) << "<" << name_ << "> Failed.";
+        });
+    }
+
+    void Start (vector<string>& inputs, const string& sandbox, json& vars)
+    {
+        thread_ = std::thread ([this, &inputs, &sandbox, &vars]() {
+            auto stat = this->Execute (inputs, sandbox, vars);
+            LINFO_IF (stat) << "<" << name_ << "> Finished.";
+            LERROR_IF (!stat) << "<" << name_ << "> Failed.";
+        });
+    }
+
+    void Join()
+    {
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+#endif
+
+
     virtual bool Execute (const string& sandbox, json& env)
     {
         std::vector<string> inputs;
         int eof = 0;
 
+#ifndef _WIN32
         OpenInputs (sandbox);
+#endif
 
         do {
             eof = ReadInputs (inputs);
@@ -188,6 +223,7 @@ public:
 
     void OpenInputs (const string& sandbox)
     {
+#ifndef _WIN32
         for (const auto& fifo : inputs_) {
             string filepath = sandbox;
             filepath.append ("/");
@@ -201,9 +237,126 @@ public:
 
             fd_in_[fifo] = fd;
         }
+#endif
     } // OpenInputs
 
 
+#ifdef _WIN32
+    int ReadInputs (vector<string>& inputs)
+    {
+        const uint32_t BUFFSIZE = 8192;
+        char cbuffer[BUFFSIZE + 1];
+        string input;
+
+        for (const auto& [fifo, handle] : fd_in_) {
+            DWORD dwRead = 0;
+            BOOL fSuccess = ReadFile (handle, cbuffer, BUFFSIZE, &dwRead, nullptr);
+
+            if (!fSuccess || dwRead == 0) {
+                DWORD err = GetLastError();
+                if (err == ERROR_MORE_DATA) {
+                    // Handle if the message is larger than the buffer
+                    LERROR << LOGNODE << "message to large.";
+                    continue;
+                }
+                else if (err == ERROR_BROKEN_PIPE) {
+                    // Handle pipe disconnection
+                    LERROR << LOGNODE << "broken pipe.";
+                    eofs_++;
+                    continue;
+                }
+                else {
+                    LERROR << LOGNODE << "ReadFile failed on: " << fifo
+                           << ". Error: " << err;
+                    continue;
+                }
+            }
+
+            cbuffer[dwRead] = '\0';
+            input += cbuffer;
+            LDEBUG << LOGNODE << "read input: " << input;
+            totalbytesread_ += dwRead;
+        }
+
+        m_split_input (input, inputs);
+
+        if (auto count = ranges::count (inputs, "EOF")) {
+            eofs_ += static_cast<int> (count);
+            LDEBUG << LOGNODE << "EOF COUNT: " << eofs_;
+        }
+
+        return (eofs_ == fd_in_.size()) ? -1 : eofs_;
+    }
+
+    void CloseInputs()
+    {
+        for (const auto& [fifo, handle] : fd_in_) {
+            BOOL stat = CloseHandle (handle);
+
+            if (!stat) {
+                LERROR << LOGNODE << "Cannot close input handle: " << fifo;
+            }
+        }
+    }
+
+    void OpenOutputs (const string& sandbox)
+    {
+        for (const auto& fifo : outputs_) {
+            auto handle = fd_out_[fifo];
+
+            BOOL connected = ConnectNamedPipe (handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+
+            if (!connected) {
+                LERROR << LOGNODE << "Error connecting to named pipe: " << fifo;
+            }
+            else {
+                LDEBUG << LOGNODE << "Connected to named pipe: " << fifo;
+            }
+        }
+    }
+
+    virtual void WriteOutputs (const string& output)
+    {
+        string token = output + '\n';
+
+        for (const auto& [fifo, handle] : fd_out_) {
+            DWORD dwWritten = 0;
+            BOOL fSuccess = WriteFile (
+                handle,
+                token.c_str(),
+                static_cast<DWORD> (token.size()),
+                &dwWritten,
+                nullptr);
+
+            if (!fSuccess || dwWritten == 0) {
+                DWORD err = GetLastError();
+                if (err == ERROR_NO_DATA) {
+                    // The pipe is being closed
+                    continue;
+                }
+                else {
+                    LERROR << LOGNODE << "WriteFile failed on: " << fifo
+                           << ". Error: " << err;
+                    continue;
+                }
+            }
+
+            totalbyteswritten_ += dwWritten;
+        }
+    }
+
+    void CloseOutputs()
+    {
+        for (const auto& [fifo, handle] : fd_out_) {
+            BOOL stat = CloseHandle (handle);
+
+            if (!stat) {
+                LERROR << LOGNODE << "Cannot close output handle: " << fifo;
+            }
+        }
+    }
+
+#else
     int ReadInputs (vector<string>& inputs)
     {
         struct pollfd pfds[fd_in_.size()];
@@ -355,6 +508,7 @@ public:
             }
         }
     } // CloseOutputs
+#endif
 
 
     virtual void Cleanup()
@@ -390,6 +544,18 @@ public:
     void set_outputfile (const string& output) { outputfile_ = output; }
     string outputfile() { return outputfile_; }
 
+#ifdef _WIN32
+    void set_input_handle (const string& uuidpair, HANDLE input_handle)
+    {
+        fd_in_[uuidpair] = input_handle;
+    }
+
+    void set_output_handle (const string& uuidpair, HANDLE output_handle)
+    {
+        fd_out_[uuidpair] = output_handle;
+    }
+#endif
+
     int input_index (const string& id)
     {
         int idx = 0;
@@ -404,9 +570,7 @@ public:
         return idx;
     } // input_index
 
-
-    std::map<string, vector<unsigned int>>
-    input_indices()
+    std::map<string, vector<unsigned int>> input_indices()
     {
         int idx = 0;
         std::map<string, vector<unsigned int>> indices;
@@ -422,7 +586,30 @@ public:
         return indices;
     }
 
+#ifdef _WIN32
+    string shell_expand (const string& input)
+    {
+        DWORD bufferSize = ExpandEnvironmentStringsA (input.c_str(), NULL, 0);
+        if (bufferSize == 0) {
+            LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
+            return "";
+        }
 
+        std::vector<char> buffer (bufferSize);
+        if (ExpandEnvironmentStringsA (input.c_str(), buffer.data(), bufferSize) == 0) {
+            LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
+            return "";
+        }
+
+        return string (buffer.data());
+    }
+
+    static string get_pipename (const string& prefix, const string& uuidpair)
+    {
+        const string sandbox_ = std::filesystem::path (prefix).filename().string();
+        return R"(\\.\pipe\)" + sandbox_ + "-" + uuidpair;
+    }
+#else
     string shell_expand (const string& input)
     {
         wordexp_t p;
@@ -454,7 +641,7 @@ public:
 
         return output;
     } // parse_outputfile
-
+#endif
 
     static void concat_inputs (vector<string>& inputs)
     {
@@ -482,8 +669,16 @@ protected:
     bool isroot_;
     list<string> inputs_;
     list<string> outputs_;
+
+#ifdef _WIN32
+    map<const string, HANDLE> fd_in_;
+    map<const string, HANDLE> fd_out_;
+    std::thread thread_;
+#else
     map<const string, int> fd_in_;
     map<const string, int> fd_out_;
+#endif
+
     int eofs_;
     size_t totalbytesread_;
     size_t totalbyteswritten_;

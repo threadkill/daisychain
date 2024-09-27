@@ -41,18 +41,26 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
     if (isroot_) {
         for (auto& input : inputs) {
+#ifdef _WIN32
+            WriteNextOutput (input);
+#else
             OpenNextOutput (sandbox);
             WriteNextOutput (input);
             CloseNextOutput();
+#endif
         }
     }
     else {
         while (eofs_ <= fd_in_.size()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
+#ifdef _WIN32
+                    WriteNextOutput (input);
+#else
                     OpenNextOutput (sandbox);
                     WriteNextOutput (input);
                     CloseNextOutput();
+#endif
                 }
             }
 
@@ -69,15 +77,128 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         CloseInputs();
     }
 
+#ifdef _WIN32
+    WriteOutputs ("EOF");
+#else
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
+#endif
     Stats();
 
     return true;
 } // DistroNode::Execute
 
 
+#ifdef _WIN32
+void
+DistroNode::OpenNextOutput (const string& sandbox)
+{
+    if (output_it_ == outputs_.end()) {
+        output_it_ = outputs_.begin();
+    }
+
+    auto fifo = *output_it_;
+    string sandbox_ = std::filesystem::path(sandbox).filename().string();
+    string pipename = R"(\\.\pipe\)" + sandbox_ + "-" + fifo;
+
+    HANDLE handle = CreateFile(
+        pipename.c_str(), // Pipe name
+        GENERIC_WRITE,    // Read and write access
+        0,                // No sharing
+        nullptr,          // Default security attributes
+        OPEN_EXISTING,    // Opens existing pipe
+        0,                // Default attributes
+        nullptr           // No template file
+    );
+
+    // Check if the pipe was successfully opened
+    if (handle == INVALID_HANDLE_VALUE) {
+        LERROR << LOGNODE << "Cannot open output for writing: " << pipename;
+        LERROR << LOGNODE << GetLastError();
+        return;
+    }
+
+    auto connected = ConnectNamedPipe (handle, nullptr);
+
+    if (!connected) {
+        LERROR << LOGNODE << "Failed to connect to pipe: " << pipename;
+        LERROR << LOGNODE << GetLastError();
+        CloseHandle (handle);
+        return;
+    }
+
+    fd_in_[fifo] = handle;
+} // DistroNode::OpenNextOutput
+
+
+void
+DistroNode::WriteNextOutput (const string& output)
+{
+    string token = output + '\n';
+    DWORD byteswritten = 0;
+    BOOL ret = false;
+    OVERLAPPED overlapped = { 0 };
+    overlapped.hEvent = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+    auto handle = fd_out_[*output_it_];
+    DWORD numbytes = 0;
+    auto tokensize = static_cast<DWORD>(token.size());
+
+    do {
+        ret = WriteFile (handle, token.c_str(), tokensize, &numbytes, nullptr);
+
+        if (!ret) {
+            LERROR << LOGNODE << "Cannot write to file descriptor: " << *output_it_;
+            continue;
+        }
+        if (numbytes) {
+            token = output.substr (numbytes) + '\n';
+        }
+
+        byteswritten += numbytes;
+        totalbyteswritten_ += numbytes;
+    } while (numbytes < tokensize || (!ret && GetLastError() == ERROR_IO_PENDING));
+} // DistroNode::WriteNextOutput
+
+
+void
+DistroNode::WriteAnyOutput (const string& output)
+{
+    string token = output + '\n';
+    BOOL ret = false;
+    OVERLAPPED overlapped = { 0 };
+    overlapped.hEvent = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+
+    for (const auto& [path, handle] : fd_out_) {
+        DWORD numbytes = 0;
+        auto tokensize = static_cast<DWORD>(token.size());
+        do {
+            ret = WriteFile (handle, token.c_str(), tokensize, &numbytes, &overlapped);
+
+            if (!ret && GetLastError() == ERROR_IO_PENDING) {
+                break;
+            }
+            else if (numbytes) {
+                token = output.substr (numbytes) + '\n';
+            }
+        } while (numbytes < tokensize);
+
+        if (numbytes == tokensize) {
+            return;
+        }
+    }
+} // DistroNode::WriteAnyOutput
+
+
+void
+DistroNode::CloseNextOutput()
+{
+    if (const auto stat = CloseHandle (fd_out_[*output_it_]); !stat) {
+        LERROR << LOGNODE << "Cannot close output file descriptor: " << *output_it_;
+    }
+    output_it_++;
+} // DistroNode::CloseNextOutput
+#else
 void
 DistroNode::OpenNextOutput (const string& sandbox)
 {
@@ -201,6 +322,7 @@ DistroNode::CloseNextOutput()
 
     output_it_++;
 } // DistroNode::CloseNextOutput
+#endif
 
 
 } // namespace daisychain

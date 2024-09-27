@@ -85,8 +85,13 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         }
         catch (const std::regex_error& e) {
             LERROR << "regex_error caught: " << e.what();
+#ifdef _WIN32
+            WriteOutputs ("EOF");
+#else
+            OpenOutputs (sandbox);
             WriteOutputs ("EOF");
             CloseOutputs();
+#endif
 
             return false;
         }
@@ -94,7 +99,6 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
     if (isroot_) {
         LDEBUG << "Root: " << name_;
-        //OpenOutputs (sandbox);
 
         for (auto& input : inputs) {
             bool match = false;
@@ -112,9 +116,13 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
             if ((match && !invert_) || (!match && invert_)) {
                 LDEBUG << "Matched: " << input;
-                //OpenOutputs (sandbox);
+#ifdef _WIN32
                 WriteOutputs (input);
-                //CloseOutputs();
+#else
+                OpenOutputs (sandbox);
+                WriteOutputs (input);
+                CloseOutputs();
+#endif
             }
             else {
                 LDEBUG << "No Match." << input;
@@ -140,9 +148,13 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
                     if ((match && !invert_) || (!match && invert_)) {
                         LDEBUG << "Matched: " << input;
-                        //OpenOutputs (sandbox);
+#ifdef _WIN32
                         WriteOutputs (input);
-                        //CloseOutputs();
+#else
+                        OpenOutputs (sandbox);
+                        WriteOutputs (input);
+                        CloseOutputs();
+#endif
                     }
                     else {
                         LDEBUG << "No Match." << input;
@@ -160,13 +172,19 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             }
         }
 
+#ifndef _WIN32
         CloseInputs();
+#endif
     }
 
     // all processing is done for this node. Send EOF downstream.
-    //OpenOutputs (sandbox);
+#ifdef _WIN32
+    WriteOutputs ("EOF");
+#else
+    OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
+#endif
     Stats();
 
     return true;

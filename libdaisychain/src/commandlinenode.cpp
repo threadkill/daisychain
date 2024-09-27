@@ -118,13 +118,19 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
             }
         }
 
+#ifndef _WIN32
         CloseInputs();
+#endif
     }
 
     // all processing is done for this node. Send EOF downstream.
-    //OpenOutputs (sandbox);
+#ifdef _WIN32
+    WriteOutputs ("EOF");
+#else
+    OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
+#endif
     Stats();
 
     return stat;
@@ -192,9 +198,13 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     if (test_) {
         LTEST << LOGNODE << "\n" << shell_expand (command_);
-        //OpenOutputs (sandbox);
+#ifdef _WIN32
         WriteOutputs (output);
-        //CloseOutputs();
+#else
+        OpenOutputs (sandbox);
+        WriteOutputs (output);
+        CloseOutputs();
+#endif
 
         return true;
     }
@@ -241,7 +251,9 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
             LDEBUG << LOGNODE << '\n' << std_out;
         }
 
-        //OpenOutputs (sandbox);
+#ifndef _WIN32
+        OpenOutputs (sandbox);
+#endif
         // capture program output and use for output var.
         if (use_std_out) {
 #ifdef _WIN32
@@ -259,7 +271,9 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         else {
             WriteOutputs (output);
         }
-        //CloseOutputs();
+#ifndef _WIN32
+        CloseOutputs();
+#endif
     }
 
     return stat;
