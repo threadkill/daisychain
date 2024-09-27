@@ -4,14 +4,14 @@
 #include <cstdint>
 #include <iostream>
 #include <list>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
-#include <map>
 
-#include <windows.h>
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
+#include <windows.h>
 
 #include "logger.h"
 #include "utils.h"
@@ -21,7 +21,7 @@ namespace daisychain {
 using namespace std;
 using json = nlohmann::ordered_json;
 
-//inline std::atomic<bool> stop_thread (false);
+// inline std::atomic<bool> stop_thread (false);
 
 
 enum DaisyNodeType : short {
@@ -36,83 +36,111 @@ enum DaisyNodeType : short {
 };
 
 static std::map<short, std::string> DaisyNodeNameByType = {
-    {DC_COMMANDLINE, "command"},
-    {DC_REMOTE, "remote"},
-    {DC_FILTER, "filter"},
-    {DC_CONCAT, "concat"},
-    {DC_DISTRO, "distro"},
-    {DC_FILELIST, "filelist"},
-    {DC_WATCH, "watch"}
+    {DC_COMMANDLINE,  "command"},
+    {     DC_REMOTE,   "remote"},
+    {     DC_FILTER,   "filter"},
+    {     DC_CONCAT,   "concat"},
+    {     DC_DISTRO,   "distro"},
+    {   DC_FILELIST, "filelist"},
+    {      DC_WATCH,    "watch"}
 };
 
-NLOHMANN_JSON_SERIALIZE_ENUM(
-    DaisyNodeType,
-    {
-        {DC_INVALID, nullptr},
-        {DC_COMMANDLINE, "command"},
-        {DC_REMOTE, "remote"},
-        {DC_FILTER, "filter"},
-        {DC_CONCAT, "concat"},
-        {DC_DISTRO, "distro"},
-        {DC_FILELIST, "filelist"},
-        {DC_WATCH, "watch"}
-    })
+NLOHMANN_JSON_SERIALIZE_ENUM (DaisyNodeType,
+                              {
+                                  {    DC_INVALID,    nullptr},
+                                  {DC_COMMANDLINE,  "command"},
+                                  {     DC_REMOTE,   "remote"},
+                                  {     DC_FILTER,   "filter"},
+                                  {     DC_CONCAT,   "concat"},
+                                  {     DC_DISTRO,   "distro"},
+                                  {   DC_FILELIST, "filelist"},
+                                  {      DC_WATCH,    "watch"}
+})
 
-class Node {
+class Node
+{
 public:
-    Node()
-        : id_(m_gen_uuid()),
-          type_(DC_INVALID),
-          position_(std::pair<float, float>(0.0f, 0.0f)),
-          size_(std::pair<int, int>(0, 0)),
-          isroot_(true),
-          batch_(false),
-          test_(false),
-          eofs_(0),
-          totalbytesread_(0),
-          totalbyteswritten_(0) {
+    Node() :
+        id_ (m_gen_uuid()),
+        type_ (DC_INVALID),
+        position_ (std::pair<float, float> (0.0f, 0.0f)),
+        size_ (std::pair<int, int> (0, 0)),
+        isroot_ (true),
+        batch_ (false),
+        test_ (false),
+        eofs_ (0),
+        totalbytesread_ (0),
+        totalbyteswritten_ (0)
+    {
     }
 
-    virtual ~Node() {
+    virtual ~Node()
+    {
         Node::Cleanup();
         LDEBUG << LOGNODE << "destroyed.";
     }
 
-    virtual void Initialize(json& keydata, bool keep_uuid) {
+    virtual void Initialize (json& keydata, bool keep_uuid)
+    {
         json::iterator jit = keydata.begin();
         const auto& uuid = jit.key();
         auto data = keydata[uuid];
 
         if (keep_uuid) {
-            set_id(uuid);
+            set_id (uuid);
         }
 
-        if (data.count("name") && !data["name"].get<string>().empty()) {
-            set_name(data["name"]);
-        } else {
-            set_name(DaisyNodeNameByType[type_]);
+        if (data.count ("name") && !data["name"].get<string>().empty()) {
+            set_name (data["name"]);
+        }
+        else {
+            set_name (DaisyNodeNameByType[type_]);
         }
 
-        if (data.count("position")) {
-            set_position(std::pair<float, float>(data["position"][0], data["position"][1]));
+        if (data.count ("position")) {
+            set_position (std::pair<float, float> (data["position"][0], data["position"][1]));
         }
-        if (data.count("size")) {
-            set_size(std::pair<int, int>(data["size"][0], data["size"][1]));
+        if (data.count ("size")) {
+            set_size (std::pair<int, int> (data["size"][0], data["size"][1]));
         }
     }
 
-    virtual json Serialize() {
+    virtual json Serialize()
+    {
         json json_ = {
-            {id_,
-             {{"type", type_},
-              {"name", name_},
-              {"position", position_}}}
+            {id_, {{"type", type_}, {"name", name_}, {"position", position_}}}
         };
 
         return json_;
     }
 
-    virtual bool Execute(const string& sandbox, json& env) {
+    void Start (const string& sandbox, json& vars)
+    {
+        thread_ = std::thread ([this, &sandbox, &vars]() {
+            auto stat = this->Execute (sandbox, vars);
+            LINFO_IF (stat) << "<" << name_ << "> Finished.";
+            LERROR_IF (!stat) << "<" << name_ << "> Failed.";
+        });
+    }
+
+    void Start (vector<string>& inputs, const string& sandbox, json& vars)
+    {
+        thread_ = std::thread ([this, &inputs, &sandbox, &vars]() {
+            auto stat = this->Execute (inputs, sandbox, vars);
+            LINFO_IF (stat) << "<" << name_ << "> Finished.";
+            LERROR_IF (!stat) << "<" << name_ << "> Failed.";
+        });
+    }
+
+    void Join()
+    {
+        if (thread_.joinable()) {
+            thread_.join();
+        }
+    }
+
+    virtual bool Execute (const string& sandbox, json& env)
+    {
         bool stop_thread = false;
         while (stop_thread) {
             // stopped.
@@ -120,57 +148,56 @@ public:
         std::vector<string> inputs;
         int eof = 0;
 
-        OpenInputs(sandbox);
+        //OpenOutputs (sandbox);
 
         do {
-            eof = ReadInputs(inputs);
+            eof = ReadInputs (inputs);
         } while (batch_ && eof != -1);
 
         if (batch_) {
-            concat_inputs(inputs);
+            concat_inputs (inputs);
         }
 
-        return Execute(inputs, sandbox, env);
+        return Execute (inputs, sandbox, env);
     }
 
-    virtual bool Execute(vector<string>& inputs, const string& sandbox, json& vars) = 0;
+    virtual bool Execute (vector<string>& inputs, const string& sandbox, json& vars) = 0;
 
-    virtual void Stats() {
+    virtual void Stats()
+    {
         LDEBUG << LOGNODE << "total bytes read: " << totalbytesread_;
         LDEBUG << LOGNODE << "total bytes written: " << totalbyteswritten_;
     }
 
-    void AddInput(const string& fifo) {
-        inputs_.push_back(fifo);
+    void AddInput (const string& fifo)
+    {
+        inputs_.push_back (fifo);
         isroot_ = false;
     }
 
-    void RemoveInput(const string& fifo) {
-        inputs_.remove(fifo);
+    void RemoveInput (const string& fifo)
+    {
+        inputs_.remove (fifo);
 
         if (inputs_.empty()) {
             isroot_ = true;
         }
     }
 
-    void AddOutput(const string& fifo) { outputs_.push_back(fifo); }
+    void AddOutput (const string& fifo) { outputs_.push_back (fifo); }
 
-    void RemoveOutput(const string& fifo) { outputs_.remove(fifo); }
+    void RemoveOutput (const string& fifo) { outputs_.remove (fifo); }
 
-    void OpenInputs(const string& sandbox) {
+    void OpenInputs (const string& sandbox)
+    {
+        /*
         for (const auto& fifo : inputs_) {
             string filepath = get_pipename (sandbox, fifo);
 
             HANDLE hPipe;
             while (true) {
-                hPipe = CreateFileA(
-                    filepath.c_str(),
-                    GENERIC_READ,
-                    0,
-                    NULL,
-                    OPEN_EXISTING,
-                    0,
-                    NULL);
+                hPipe
+                    = CreateFileA (filepath.c_str(), GENERIC_READ, 0, NULL, OPEN_EXISTING, 0, NULL);
 
                 if (hPipe != INVALID_HANDLE_VALUE) {
                     fd_in_[fifo] = hPipe;
@@ -185,22 +212,18 @@ public:
                 break;
             }
         }
+        */
     }
 
-    int ReadInputs(vector<string>& inputs) {
+    int ReadInputs (vector<string>& inputs)
+    {
         const uint32_t BUFFSIZE = 8192;
         char cbuffer[BUFFSIZE + 1];
         string input;
 
-        for (const auto& fd_pair : fd_in_) {
-            HANDLE hPipe = fd_pair.second;
+        for (const auto& [fifo, handle] : fd_in_) {
             DWORD dwRead = 0;
-            BOOL fSuccess = ReadFile(
-                hPipe,
-                cbuffer,
-                BUFFSIZE,
-                &dwRead,
-                NULL);
+            BOOL fSuccess = ReadFile (handle, cbuffer, BUFFSIZE, &dwRead, nullptr);
 
             if (!fSuccess || dwRead == 0) {
                 DWORD err = GetLastError();
@@ -208,13 +231,15 @@ public:
                     // Handle if the message is larger than the buffer
                     LERROR << LOGNODE << "message to large.";
                     continue;
-                } else if (err == ERROR_BROKEN_PIPE) {
+                }
+                else if (err == ERROR_BROKEN_PIPE) {
                     // Handle pipe disconnection
                     LERROR << LOGNODE << "broken pipe.";
                     eofs_++;
                     continue;
-                } else {
-                    LERROR << LOGNODE << "ReadFile failed on: " << fd_pair.first
+                }
+                else {
+                    LERROR << LOGNODE << "ReadFile failed on: " << fifo
                            << ". Error: " << err;
                     continue;
                 }
@@ -226,121 +251,64 @@ public:
             totalbytesread_ += dwRead;
         }
 
-        m_split_input(input, inputs);
+        m_split_input (input, inputs);
 
-        auto count = std::count(inputs.begin(), inputs.end(), "EOF");
-
-        if (count) {
-            eofs_ += int(count);
+        if (auto count = ranges::count (inputs, "EOF")) {
+            eofs_ += static_cast<int> (count);
             LDEBUG << LOGNODE << "EOF COUNT: " << eofs_;
         }
 
         return (eofs_ == fd_in_.size()) ? -1 : eofs_;
     }
 
-    void CloseInputs() {
-        for (const auto& fd : fd_in_) {
-            BOOL stat = CloseHandle(fd.second);
+    void CloseInputs()
+    {
+        for (const auto& [fifo, handle] : fd_in_) {
+            BOOL stat = CloseHandle (handle);
 
             if (!stat) {
-                LERROR << LOGNODE << "Cannot close input handle: " << fd.first;
-                continue;
+                LERROR << LOGNODE << "Cannot close input handle: " << fifo;
             }
         }
     }
 
-    void OpenOutputs(const string& sandbox) {
+    void OpenOutputs (const string& sandbox)
+    {
         for (const auto& fifo : outputs_) {
-            string filepath = get_pipename (sandbox, fifo);
+            auto handle = fd_out_[fifo];
 
-            // Create a named pipe with duplex communication
-            HANDLE hPipe = CreateNamedPipeA(
-                filepath.c_str(),             // Pipe name
-                PIPE_ACCESS_OUTBOUND,           // Read/Write access
-                PIPE_TYPE_BYTE |              // Byte-type pipe
-                PIPE_READMODE_BYTE |          // Byte read mode
-                PIPE_WAIT,                    // Blocking mode
-                1,                            // Max. instances (since one thread per pipe)
-                8192,                         // Output buffer size
-                8192,                         // Input buffer size
-                0,                            // Default time-out
-                nullptr);         // Default security attributes
-
-            if (hPipe == INVALID_HANDLE_VALUE) {
-                LERROR << "Error creating named pipe " << filepath << ". GLE=" << GetLastError() << std::endl;
-                continue;
-            }
-            else {
-                LDEBUG << LOGNODE << "Created named pipe " << filepath;
-            }
-
-            BOOL connected = ConnectNamedPipe(hPipe, NULL) ?
-                TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+            BOOL connected = ConnectNamedPipe (handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
             if (!connected) {
-                LERROR << LOGNODE << "Error connecting to named pipe: " << filepath;
+                LERROR << LOGNODE << "Error connecting to named pipe: " << fifo;
             }
             else {
-                LDEBUG << LOGNODE << "Connected to named pipe: " << filepath;
+                LDEBUG << LOGNODE << "Connected to named pipe: " << fifo;
             }
-            /*
-            HANDLE hPipe;
-            while (true) {
-                hPipe = CreateFileA(
-                    filepath.c_str(),
-                    GENERIC_WRITE,
-                    0,
-                    NULL,
-                    OPEN_EXISTING,
-                    0,
-                    NULL);
-
-                if (hPipe != INVALID_HANDLE_VALUE)
-                    break;
-
-                DWORD err = GetLastError();
-                if (err != ERROR_PIPE_BUSY) {
-                    LERROR << LOGNODE << "Cannot open pipe for writing: " << filepath
-                           << ". Error: " << err;
-                    break;
-                }
-
-                if (!WaitNamedPipeA(filepath.c_str(), 5000)) {
-                    LERROR << LOGNODE << "Could not open pipe: " << filepath
-                           << " after waiting. Error: " << GetLastError();
-                    break;
-                }
-            }
-
-            if (hPipe == INVALID_HANDLE_VALUE) {
-                continue;
-            }
-            */
-
-            fd_out_[fifo] = hPipe;
         }
     }
 
-    virtual void WriteOutputs(const string& output) {
+    virtual void WriteOutputs (const string& output)
+    {
         string token = output + '\n';
 
-        for (const auto& fd_pair : fd_out_) {
-            HANDLE hPipe = fd_pair.second;
+        for (const auto& [fifo, handle] : fd_out_) {
             DWORD dwWritten = 0;
-            BOOL fSuccess = WriteFile(
-                hPipe,
+            BOOL fSuccess = WriteFile (
+                handle,
                 token.c_str(),
-                (DWORD)token.size(),
+                static_cast<DWORD> (token.size()),
                 &dwWritten,
-                NULL);
+                nullptr);
 
             if (!fSuccess || dwWritten == 0) {
                 DWORD err = GetLastError();
                 if (err == ERROR_NO_DATA) {
                     // The pipe is being closed
                     continue;
-                } else {
-                    LERROR << LOGNODE << "WriteFile failed on: " << fd_pair.first
+                }
+                else {
+                    LERROR << LOGNODE << "WriteFile failed on: " << fifo
                            << ". Error: " << err;
                     continue;
                 }
@@ -348,20 +316,21 @@ public:
 
             totalbyteswritten_ += dwWritten;
         }
-
     }
 
-    void CloseOutputs() {
-        for (const auto& fd : fd_out_) {
-            BOOL stat = CloseHandle(fd.second);
+    void CloseOutputs()
+    {
+        for (const auto& [fifo, handle] : fd_out_) {
+            BOOL stat = CloseHandle (handle);
 
             if (!stat) {
-                LERROR << LOGNODE << "Cannot close output handle: " << fd.first;
+                LERROR << LOGNODE << "Cannot close output handle: " << fifo;
             }
         }
     }
 
-    virtual void Cleanup() {
+    virtual void Cleanup()
+    {
         CloseOutputs();
         CloseInputs();
     }
@@ -369,30 +338,41 @@ public:
     DaisyNodeType type() { return type_; }
 
     void set_id() { id_ = m_gen_uuid(); }
-    void set_id(const string& id) { id_ = id; }
+    void set_id (const string& id) { id_ = id; }
     string id() { return id_; }
 
-    void set_name(const string& name) { name_ = name; }
+    void set_name (const string& name) { name_ = name; }
     string name() { return name_; }
 
-    void set_position(std::pair<float, float> position) { position_ = position; }
+    void set_position (std::pair<float, float> position) { position_ = position; }
     std::pair<float, float> position() { return position_; }
 
-    void set_size(std::pair<int, int> size) { size_ = size; }
+    void set_size (std::pair<int, int> size) { size_ = size; }
     std::pair<int, int> size() { return size_; }
 
     [[nodiscard]] bool is_root() const { return isroot_; }
 
-    void set_batch_flag(bool batch) { batch_ = batch; }
+    void set_batch_flag (bool batch) { batch_ = batch; }
     [[nodiscard]] bool batch_flag() const { return batch_; }
 
-    void set_test_flag(bool test) { test_ = test; }
+    void set_test_flag (bool test) { test_ = test; }
     [[nodiscard]] bool test_flag() const { return test_; }
 
-    void set_outputfile(const string& output) { outputfile_ = output; }
+    void set_outputfile (const string& output) { outputfile_ = output; }
     string outputfile() { return outputfile_; }
 
-    int input_index(const string& id) {
+    void set_input_handle (const string& uuidpair, HANDLE input_handle)
+    {
+        fd_in_[uuidpair] = input_handle;
+    }
+
+    void set_output_handle (const string& uuidpair, HANDLE output_handle)
+    {
+        fd_out_[uuidpair] = output_handle;
+    }
+
+    int input_index (const string& id)
+    {
         int idx = 0;
 
         for (const auto& input : inputs_) {
@@ -405,50 +385,54 @@ public:
         return idx;
     }
 
-    std::map<string, vector<unsigned int>> input_indices() {
+    std::map<string, vector<unsigned int>> input_indices()
+    {
         int idx = 0;
         std::map<string, vector<unsigned int>> indices;
 
         for (const auto& input : inputs_) {
-            if (!indices.count(input)) {
+            if (!indices.count (input)) {
                 indices[input];
             }
-            indices[input].push_back(idx);
+            indices[input].push_back (idx);
             idx++;
         }
 
         return indices;
     }
 
-    string shell_expand(const string& input) {
-        DWORD bufferSize = ExpandEnvironmentStringsA(input.c_str(), NULL, 0);
+    string shell_expand (const string& input)
+    {
+        DWORD bufferSize = ExpandEnvironmentStringsA (input.c_str(), NULL, 0);
         if (bufferSize == 0) {
             LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
             return "";
         }
 
-        std::vector<char> buffer(bufferSize);
-        if (ExpandEnvironmentStringsA(input.c_str(), buffer.data(), bufferSize) == 0) {
+        std::vector<char> buffer (bufferSize);
+        if (ExpandEnvironmentStringsA (input.c_str(), buffer.data(), bufferSize) == 0) {
             LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
             return "";
         }
 
-        return string(buffer.data());
+        return string (buffer.data());
     }
 
-    static void concat_inputs(vector<string>& inputs) {
+    static void concat_inputs (vector<string>& inputs)
+    {
         // Drop EOF and concatenate inputs into a newline-separated string.
-        string input = m_join_if(inputs, "\n", [](const std::string& s) { return (s != "EOF"); });
+        string input = m_join_if (inputs, "\n", [] (const std::string& s) { return (s != "EOF"); });
 
         // Still using the vector, but now there's only a single element with combined string.
         inputs.clear();
         if (!input.empty()) {
-            inputs.emplace_back(input);
+            inputs.emplace_back (input);
         }
-        inputs.emplace_back("EOF");
+        inputs.emplace_back ("EOF");
     }
 
-    static string get_pipename (const string& prefix, const string& uuidpair) {
+    static string get_pipename (const string& prefix, const string& uuidpair)
+    {
         const string sandbox_ = std::filesystem::path (prefix).filename().string();
         return R"(\\.\pipe\)" + sandbox_ + "-" + uuidpair;
     }
@@ -473,5 +457,6 @@ protected:
     int eofs_;
     size_t totalbytesread_;
     size_t totalbyteswritten_;
+    std::thread thread_;
 };
 } // namespace daisychain

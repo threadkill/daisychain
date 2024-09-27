@@ -142,7 +142,6 @@ private:
     list<Edge> edges_;
     std::unordered_map<string, vector<string>> adjacencylist_;
     vector<string> ordered_;
-    vector<thread> threads_;
     vector<HANDLE> handles_;
 
 

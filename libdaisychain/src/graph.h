@@ -23,9 +23,11 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <sys/wait.h>
 #include <stack>
 #include <set>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 #include "logger.h"
 #include "node.h"
@@ -144,6 +146,9 @@ private:
     std::unordered_map<string, vector<string>> adjacencylist_;
     vector<string> ordered_;
 
+#ifdef _WIN32
+    vector<HANDLE> handles_;
+#else
     pid_t process_group_{};
 
 
@@ -159,6 +164,7 @@ private:
             LERROR << "Process failed (non-zero exit()). " << wpid;
         }
     }
+#endif
 
 
     void sort_visitor_ (const string& v, std::set<string>& visited, std::stack<string>& stacked)

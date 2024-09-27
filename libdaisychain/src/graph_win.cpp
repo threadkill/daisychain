@@ -207,34 +207,53 @@ Graph::PrepareFileSystem()
         }
     }
 
-    /*
     for (const auto& [parent, child] : edges_) {
-        std::string pipePath = Node::get_pipename (sandbox_, parent + "." + child);
+        auto uuidpair = parent + "." + child;
+        std::string pipename = Node::get_pipename (sandbox_, uuidpair);
 
-        SECURITY_ATTRIBUTES sa = {sizeof(SECURITY_ATTRIBUTES), NULL, TRUE};
+        HANDLE hwrite = CreateNamedPipeA(
+            pipename.c_str(),
+            PIPE_ACCESS_OUTBOUND,
+            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE| PIPE_NOWAIT,
+            1,
+            0,
+            0,
+            0,
+            nullptr);
 
-        // Create a named pipe with duplex communication
-        HANDLE hPipe = CreateNamedPipeA(
-            pipePath.c_str(),             // Pipe name
-            PIPE_ACCESS_DUPLEX,           // Read/Write access
-            PIPE_TYPE_BYTE |              // Byte-type pipe
-            PIPE_READMODE_BYTE |          // Byte read mode
-            PIPE_WAIT,                    // Blocking mode
-            1,                            // Max. instances (since one thread per pipe)
-            8192,                         // Output buffer size
-            8192,                         // Input buffer size
-            0,                            // Default time-out
-            &sa);         // Default security attributes
-
-        if (hPipe == INVALID_HANDLE_VALUE) {
-            std::cerr << "Error creating named pipe " << pipePath
-                      << ". GLE=" << GetLastError() << std::endl;
-            continue;
+        if (hwrite == INVALID_HANDLE_VALUE) {
+            LERROR << "Error creating named pipe: " << pipename << " " << GetLastError();
+            status = false;
+            break;
         }
 
-        handles_.push_back (hPipe);
+        handles_.push_back (hwrite);
+        nodes_[parent]->set_output_handle (uuidpair, hwrite);
+
+        HANDLE hread = CreateFileA(
+            pipename.c_str(),
+            GENERIC_READ,
+            0,
+            nullptr,
+            OPEN_EXISTING,
+            0,
+            nullptr
+        );
+
+        if (hread == INVALID_HANDLE_VALUE) {
+            LERROR << "Failed to open pipe: " << pipename << " " << GetLastError();
+            status = false;
+            break;
+        }
+
+        nodes_[child]->set_input_handle (uuidpair, hread);
+        handles_.push_back (hread);
     }
-        */
+
+    for (const auto& [name, node]: nodes_) {
+        node->OpenOutputs (sandbox_);
+    }
+
     return status;
 } // Graph::PrepareFileSystem
 
@@ -285,31 +304,17 @@ Graph::Execute (const string& input, json& env)
     for (const auto& uuid : ordered_) {
         auto node_ = nodes_[uuid];
         if (node_->is_root()) {
-            LDEBUG << "Root node: " << node_->name();
             // root nodes receive initial input.
-            threads_.emplace_back (
-                [this, &node_, &inputs, &merged_env]() {
-                    bool stat = node_->Execute (inputs, sandbox_, merged_env);
-                    LINFO_IF (stat) << "<" << node_->name() << "> Finished.";
-                    LERROR_IF (!stat) << "<" << node_->name() << "> Failed.";
-                }
-            );
+            LDEBUG << "Root node: " << node_->name();
+            node_->Start (inputs, sandbox_, merged_env);
         }
         else {
-            threads_.emplace_back (
-                [this, &node_, &merged_env]() {
-                    bool stat = node_->Execute (sandbox_, merged_env);
-                    LINFO_IF (stat) << "<" << node_->name() << "> Finished.";
-                    LERROR_IF (!stat) << "<" << node_->name() << "> Failed.";
-                }
-            );
+            node_->Start (sandbox_, merged_env);
         }
     }
 
-    for (auto& t_: threads_) {
-        if (t_.joinable()) {
-            t_.join();
-        }
+    for (const auto& uuid : ordered_) {
+        nodes_[uuid]->Join();
     }
 
     /*

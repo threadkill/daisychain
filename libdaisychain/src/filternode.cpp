@@ -85,7 +85,6 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         }
         catch (const std::regex_error& e) {
             LERROR << "regex_error caught: " << e.what();
-            OpenOutputs (sandbox);
             WriteOutputs ("EOF");
             CloseOutputs();
 
@@ -95,6 +94,8 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
     if (isroot_) {
         LDEBUG << "Root: " << name_;
+        //OpenOutputs (sandbox);
+
         for (auto& input : inputs) {
             bool match = false;
 
@@ -111,9 +112,9 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
             if ((match && !invert_) || (!match && invert_)) {
                 LDEBUG << "Matched: " << input;
-                OpenOutputs (sandbox);
+                //OpenOutputs (sandbox);
                 WriteOutputs (input);
-                CloseOutputs();
+                //CloseOutputs();
             }
             else {
                 LDEBUG << "No Match." << input;
@@ -139,9 +140,9 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
                     if ((match && !invert_) || (!match && invert_)) {
                         LDEBUG << "Matched: " << input;
-                        OpenOutputs (sandbox);
+                        //OpenOutputs (sandbox);
                         WriteOutputs (input);
-                        CloseOutputs();
+                        //CloseOutputs();
                     }
                     else {
                         LDEBUG << "No Match." << input;
@@ -163,7 +164,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     }
 
     // all processing is done for this node. Send EOF downstream.
-    OpenOutputs (sandbox);
+    //OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
