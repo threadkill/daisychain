@@ -259,7 +259,7 @@ Graph::PrepareFileSystem()
     }
 
     for (const auto& [name, node]: nodes_) {
-        node->OpenOutputs (sandbox_);
+        node->OpenPipes (sandbox_);
     }
 #else
     if (sandbox_.empty()) {

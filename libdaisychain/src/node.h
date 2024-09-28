@@ -142,7 +142,6 @@ public:
     }
 
 
-#ifdef _WIN32
     void Start (const string& sandbox, json& vars)
     {
         thread_ = std::thread ([this, &sandbox, &vars]() {
@@ -167,7 +166,6 @@ public:
             thread_.join();
         }
     }
-#endif
 
 
     virtual bool Execute (const string& sandbox, json& env)
@@ -175,9 +173,7 @@ public:
         std::vector<string> inputs;
         int eof = 0;
 
-#ifndef _WIN32
         OpenInputs (sandbox);
-#endif
 
         do {
             eof = ReadInputs (inputs);
@@ -241,7 +237,75 @@ public:
     } // OpenInputs
 
 
+    void CloseInputs()
+    {
+#ifndef _WIN32
+        for (const auto& fd : fd_in_) {
+            int stat = close (fd.second);
+
+            if (stat == -1) {
+                LERROR << LOGNODE << "Cannot close input file descriptor: " << fd.first;
+                continue;
+            }
+        }
+#endif
+    } // CloseInputs
+
+
+    void OpenOutputs (const string& sandbox)
+    {
+#ifndef _WIN32
+        for (const auto& fifo : outputs_) {
+            string filepath = sandbox;
+            filepath.append ("/");
+            filepath.append (fifo);
+
+            int fd = open (filepath.c_str(), O_WRONLY);
+
+            if (fd == -1) {
+                LERROR << LOGNODE << "Cannot open output for writing: " << filepath;
+                continue;
+            }
+
+            fd_out_[fifo] = fd;
+        }
+#endif
+    } // OpenOutputs
+
+
+    void CloseOutputs()
+    {
+#ifndef _WIN32
+        for (const auto& fd : fd_out_) {
+            int stat = close (fd.second);
+
+            if (stat == -1) {
+                LERROR << LOGNODE << "Cannot close output file descriptor: " << fd.first;
+                continue;
+            }
+        }
+#endif
+    } // CloseOutputs
+
+
 #ifdef _WIN32
+    void OpenPipes (const string& sandbox)
+    {
+        for (const auto& fifo : outputs_) {
+            auto handle = fd_out_[fifo];
+
+            BOOL connected = ConnectNamedPipe (handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+
+            if (!connected) {
+                LERROR << LOGNODE << "Error connecting to named pipe: " << fifo;
+            }
+            else {
+                LDEBUG << LOGNODE << "Connected to named pipe: " << fifo;
+            }
+        }
+    } // OpenPipes
+
+
     int ReadInputs (vector<string>& inputs)
     {
         const uint32_t BUFFSIZE = 8192;
@@ -288,33 +352,6 @@ public:
         return (eofs_ == fd_in_.size()) ? -1 : eofs_;
     }
 
-    void CloseInputs()
-    {
-        for (const auto& [fifo, handle] : fd_in_) {
-            BOOL stat = CloseHandle (handle);
-
-            if (!stat) {
-                LERROR << LOGNODE << "Cannot close input handle: " << fifo;
-            }
-        }
-    }
-
-    void OpenOutputs (const string& sandbox)
-    {
-        for (const auto& fifo : outputs_) {
-            auto handle = fd_out_[fifo];
-
-            BOOL connected = ConnectNamedPipe (handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-
-            if (!connected) {
-                LERROR << LOGNODE << "Error connecting to named pipe: " << fifo;
-            }
-            else {
-                LDEBUG << LOGNODE << "Connected to named pipe: " << fifo;
-            }
-        }
-    }
-
     virtual void WriteOutputs (const string& output)
     {
         string token = output + '\n';
@@ -342,17 +379,6 @@ public:
             }
 
             totalbyteswritten_ += dwWritten;
-        }
-    }
-
-    void CloseOutputs()
-    {
-        for (const auto& [fifo, handle] : fd_out_) {
-            BOOL stat = CloseHandle (handle);
-
-            if (!stat) {
-                LERROR << LOGNODE << "Cannot close output handle: " << fifo;
-            }
         }
     }
 
@@ -409,38 +435,6 @@ public:
     } // ReadInputs
 
 
-    void CloseInputs()
-    {
-        for (const auto& fd : fd_in_) {
-            int stat = close (fd.second);
-
-            if (stat == -1) {
-                LERROR << LOGNODE << "Cannot close input file descriptor: " << fd.first;
-                continue;
-            }
-        }
-    } // CloseInputs
-
-
-    void OpenOutputs (const string& sandbox)
-    {
-        for (const auto& fifo : outputs_) {
-            string filepath = sandbox;
-            filepath.append ("/");
-            filepath.append (fifo);
-
-            int fd = open (filepath.c_str(), O_WRONLY);
-
-            if (fd == -1) {
-                LERROR << LOGNODE << "Cannot open output for writing: " << filepath;
-                continue;
-            }
-
-            fd_out_[fifo] = fd;
-        }
-    } // OpenOutputs
-
-
     virtual void WriteOutputs (const string& output)
     {
         string token = output + '\n';
@@ -495,19 +489,6 @@ public:
             }
         } while (byteswritten < totalbytes);
     } // WriteOutputs
-
-
-    void CloseOutputs()
-    {
-        for (const auto& fd : fd_out_) {
-            int stat = close (fd.second);
-
-            if (stat == -1) {
-                LERROR << LOGNODE << "Cannot close output file descriptor: " << fd.first;
-                continue;
-            }
-        }
-    } // CloseOutputs
 #endif
 
 
@@ -609,6 +590,7 @@ public:
         const string sandbox_ = std::filesystem::path (prefix).filename().string();
         return R"(\\.\pipe\)" + sandbox_ + "-" + uuidpair;
     }
+
 #else
     string shell_expand (const string& input)
     {
@@ -655,6 +637,7 @@ public:
         }
         inputs.emplace_back ("EOF");
     } // concat_inputs
+
 
 protected:
     string id_;

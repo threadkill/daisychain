@@ -60,9 +60,6 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
     // env) after processing their inputs.
     LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << LOGNODE ;
 
-    while (false) {
-    }
-
     bool stat = true;
 
     // prepare the shell environment
@@ -78,7 +75,6 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
     // root nodes are passed a single string of all inputs and these
     // inputs may need to be tokenized if batch == false.
     if (isroot_) {
-        //OpenOutputs (sandbox);
         if (batch_) {
             concat_inputs (inputs);
         }
@@ -118,19 +114,14 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
             }
         }
 
-#ifndef _WIN32
         CloseInputs();
-#endif
     }
 
     // all processing is done for this node. Send EOF downstream.
-#ifdef _WIN32
-    WriteOutputs ("EOF");
-#else
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
-#endif
+
     Stats();
 
     return stat;
@@ -198,13 +189,9 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     if (test_) {
         LTEST << LOGNODE << "\n" << shell_expand (command_);
-#ifdef _WIN32
-        WriteOutputs (output);
-#else
         OpenOutputs (sandbox);
         WriteOutputs (output);
         CloseOutputs();
-#endif
 
         return true;
     }
@@ -251,9 +238,8 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
             LDEBUG << LOGNODE << '\n' << std_out;
         }
 
-#ifndef _WIN32
         OpenOutputs (sandbox);
-#endif
+
         // capture program output and use for output var.
         if (use_std_out) {
 #ifdef _WIN32
@@ -271,9 +257,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         else {
             WriteOutputs (output);
         }
-#ifndef _WIN32
         CloseOutputs();
-#endif
     }
 
     return stat;

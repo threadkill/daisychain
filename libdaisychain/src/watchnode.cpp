@@ -80,13 +80,9 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         else {
             RemoveWatches();
 
-#ifdef _WIN32
-            WriteOutputs ("EOF");
-#else
             OpenOutputs (sandbox);
             WriteOutputs ("EOF");
             CloseOutputs();
-#endif
         }
     }
 
@@ -516,10 +512,10 @@ WatchNode::Notify (const string& sandbox, const string& path)
             input.c_str(),
             FILE_LIST_DIRECTORY,
             FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            NULL,
+            nullptr,
             OPEN_EXISTING,
             FILE_FLAG_BACKUP_SEMANTICS,
-            NULL
+            nullptr
         );
 
         if (handle_ == INVALID_HANDLE_VALUE) {
@@ -543,7 +539,6 @@ WatchNode::Monitor (const string& sandbox)
     DWORD dwBytesReturned;
     char buffer[1024];
     FILE_NOTIFY_INFORMATION *pNotify;
-    int offset;
 
     while (TRUE) {
         if (ReadDirectoryChangesW(
@@ -558,14 +553,14 @@ WatchNode::Monitor (const string& sandbox)
                 FILE_NOTIFY_CHANGE_LAST_WRITE |
                 FILE_NOTIFY_CHANGE_CREATION,
                 &dwBytesReturned,
-                NULL,
-                NULL))
+                nullptr,
+                nullptr))
         {
-            offset = 0;
+            int offset = 0;
             bool transmit = false;
 
             do {
-                pNotify = (FILE_NOTIFY_INFORMATION*) &buffer[offset];
+                pNotify = reinterpret_cast<FILE_NOTIFY_INFORMATION*> (&buffer[offset]);
 
                 switch (pNotify->Action) {
                     case FILE_ACTION_ADDED:
