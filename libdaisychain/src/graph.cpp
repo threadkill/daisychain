@@ -47,7 +47,7 @@ Graph::Initialize (const string& filename)
     filename_ = filename;
 
     input_.clear();
-    environ_.clear();
+    environment_.clear();
     notes_.clear();
     test_ = false;
     nodes_.clear();
@@ -91,7 +91,7 @@ Graph::Serialize()
         data["connections"] += {edge.first, edge.second};
     }
 
-    data["environment"] = environ_;
+    data["environment"] = environment_;
 
     data["notes"] = notes_;
 
@@ -141,8 +141,8 @@ Graph::Parse (const json& json_graph)
 
     if (json_graph.contains ("environment")) {
         for (auto& [key, data] : json_graph["environment"].items()) {
-            if (!environ_.contains (key)) {
-                environ_[key] = data;
+            if (!environment_.contains (key)) {
+                environment_[key] = data;
             }
         }
     }
@@ -229,14 +229,14 @@ Graph::PrepareFileSystem()
 bool
 Graph::Execute()
 {
-    return Execute (input_, environ_);
+    return Execute (input_, environment_);
 } // Graph::Execute
 
 
 bool
 Graph::Execute (const string& input)
 {
-    return Execute (input, environ_);
+    return Execute (input, environment_);
 } // Graph::Execute
 
 
@@ -250,7 +250,7 @@ Graph::Execute (const string& input, json& env)
         return false;
     }
 
-    json merged_env = environ_;
+    json merged_env = environment_;
     if (!env.empty()) {
         merged_env.merge_patch (env);
     }
@@ -617,16 +617,16 @@ Graph::input()
 
 
 void
-Graph::set_environ (json& env)
+Graph::set_environment (json& env)
 {
-    environ_ = env;
+    environment_ = env;
 } // Graph::set_environ
 
 
 json
-Graph::environ()
+Graph::environment()
 {
-    return environ_;
+    return environment_;
 } // Graph::environ
 
 

@@ -47,7 +47,7 @@ GraphModel::GraphModel (std::shared_ptr<QtNodes::NodeDelegateModelRegistry> regi
 void
 GraphModel::updateEnviron (json& env)
 {
-    graph_->set_environ (env);
+    graph_->set_environment (env);
 } // GraphModel::updateEnviron
 
 
@@ -339,7 +339,7 @@ void
 GraphModel::emitAll()
 {
     Q_EMIT (inputUpdated());
-    Q_EMIT (environUpdated (graph_->environ()));
+    Q_EMIT (environUpdated (graph_->environment()));
     Q_EMIT (notesUpdated (graph_->notes()));
 }
 

@@ -103,9 +103,9 @@ public:
 
     string sandbox();
 
-    void set_environ (json& env);
+    void set_environment (json& env);
 
-    json environ();
+    json environment();
 
     void set_notes (json& notes);
 
@@ -133,7 +133,7 @@ private:
     string filename_;
     string sandbox_;
     string input_;
-    json environ_;
+    json environment_;
     json notes_;
     bool running_;
     bool cleanup_;

@@ -23,7 +23,6 @@
 
 LogFilter::~LogFilter()
 {
-    el::LogDispatchCallback::~LogDispatchCallback();
     ::close (fd);
 }
 
