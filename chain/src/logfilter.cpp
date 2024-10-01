@@ -23,7 +23,6 @@
 
 LogFilter::~LogFilter()
 {
-    el::LogDispatchCallback::~LogDispatchCallback();
 #ifdef _WIN32
     CloseHandle (fd);
 #else

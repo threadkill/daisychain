@@ -259,7 +259,7 @@ Graph::PrepareFileSystem()
     }
 
     for (const auto& [name, node]: nodes_) {
-        node->OpenPipes (sandbox_);
+        node->OpenPipes();
     }
 #else
     if (sandbox_.empty()) {
@@ -432,6 +432,8 @@ Graph::Execute (const string& input, json& env)
 
     running_ = false;
 
+    CloseHandles();
+
     return true;
 } // Graph::Execute
 
@@ -491,6 +493,19 @@ Graph::Terminate()
 }
 
 
+void
+Graph::CloseHandles()
+{
+#ifdef _WIN32
+    for (const auto handle_: handles_) {
+        CloseHandle (handle_);
+    }
+
+    handles_.clear();
+#endif
+}
+
+
 bool
 Graph::Cleanup()
 {
@@ -502,9 +517,7 @@ Graph::Cleanup()
     int status = DeleteDirectoryRecursively (sandbox_);
     status == 0 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
 
-    for (const auto handle_: handles_) {
-        CloseHandle (handle_);
-    }
+    CloseHandles();
 #else
     auto rmdirtree = [] (const char* path, const struct stat* buf, int type, struct FTW* ftwb) {
         int stat = std::remove (path);

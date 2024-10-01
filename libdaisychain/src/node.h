@@ -146,6 +146,7 @@ public:
     {
         thread_ = std::thread ([this, &sandbox, &vars]() {
             auto stat = this->Execute (sandbox, vars);
+            this->ClearHandles();
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -155,6 +156,7 @@ public:
     {
         thread_ = std::thread ([this, &inputs, &sandbox, &vars]() {
             auto stat = this->Execute (inputs, sandbox, vars);
+            this->ClearHandles();
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -289,12 +291,12 @@ public:
 
 
 #ifdef _WIN32
-    void OpenPipes (const string& sandbox)
+    void OpenPipes()
     {
         for (const auto& fifo : outputs_) {
             auto handle = fd_out_[fifo];
 
-            BOOL connected = ConnectNamedPipe (handle, NULL) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
+            BOOL connected = ConnectNamedPipe (handle, nullptr) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
 
             if (!connected) {
                 LERROR << LOGNODE << "Error connecting to named pipe: " << fifo;
@@ -304,6 +306,13 @@ public:
             }
         }
     } // OpenPipes
+
+
+    void ClearHandles()
+    {
+        fd_in_.clear();
+        fd_out_.clear();
+    } // ClearHandles
 
 
     int ReadInputs (vector<string>& inputs)
@@ -496,6 +505,7 @@ public:
     {
         CloseOutputs();
         CloseInputs();
+        ClearHandles();
     } // Cleanup
 
 

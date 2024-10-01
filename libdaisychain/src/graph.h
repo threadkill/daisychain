@@ -81,6 +81,8 @@ public:
 
     void Terminate();
 
+    void CloseHandles();
+
     bool Cleanup();
 
     void Print();
