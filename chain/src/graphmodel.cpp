@@ -21,6 +21,7 @@
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QTextEdit>
 #include <utility>
+#include <fstream>
 
 
 
@@ -33,7 +34,10 @@ GraphModel::GraphModel (std::shared_ptr<QtNodes::NodeDelegateModelRegistry> regi
     graph_->PrepareFileSystem();
     graphlog_ = graph_->sandbox() + ".log";
 
-    if (::creat (graphlog_.c_str(), 0644) == -1) {
+    if (std::ofstream log_ (graphlog_.c_str()); log_) {
+        log_.close();
+    }
+    else {
         LERROR << "Could not open logfile for reading/writing: " << graphlog_;
     }
 
@@ -47,7 +51,7 @@ GraphModel::GraphModel (std::shared_ptr<QtNodes::NodeDelegateModelRegistry> regi
 void
 GraphModel::updateEnviron (json& env)
 {
-    graph_->set_environ (env);
+    graph_->set_environment (env);
 } // GraphModel::updateEnviron
 
 
@@ -339,7 +343,7 @@ void
 GraphModel::emitAll()
 {
     Q_EMIT (inputUpdated());
-    Q_EMIT (environUpdated (graph_->environ()));
+    Q_EMIT (environUpdated (graph_->environment()));
     Q_EMIT (notesUpdated (graph_->notes()));
 }
 

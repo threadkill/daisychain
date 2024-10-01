@@ -46,14 +46,17 @@ mkdtemp_ (const std::string& templateStr) {
         std::string randomStr = generateRandomString (maskLength);
 
         // Replace the 'XXXXXX' mask with the random string
-        std::string dirPath = templateStr;
-        dirPath.replace (pos, maskLength, randomStr);
+        std::string tempdir = templateStr;
+        std::string temppath (getenv ("TEMP"));
+        temppath += "\\";
+        tempdir.replace (pos, maskLength, randomStr);
+        temppath += tempdir;
 
         // Try to create the directory
-        if (CreateDirectory(dirPath.c_str(), nullptr)) {
+        if (CreateDirectoryA (temppath.c_str(), nullptr)) {
             // Directory creation succeeded
             success = true;
-            return dirPath;
+            return temppath;
         } else if (GetLastError() == ERROR_ALREADY_EXISTS) {
             // Directory already exists, retry with a different random string
             continue;
@@ -131,11 +134,11 @@ DeleteDirectoryRecursively (const std::string& directory) {
 inline std::string
 wchar2string (const wchar_t* wcharStr) {
     if (!wcharStr)
-        return std::string();
+        return {};
 
-    int size_needed = WideCharToMultiByte (CP_UTF8, 0, wcharStr, -1, NULL, 0, NULL, NULL);
+    int size_needed = WideCharToMultiByte (CP_UTF8, 0, wcharStr, -1, nullptr, 0, nullptr, nullptr);
     std::string result (size_needed, 0);
-    WideCharToMultiByte (CP_UTF8, 0, wcharStr, -1, &result[0], size_needed, NULL, NULL);
+    WideCharToMultiByte (CP_UTF8, 0, wcharStr, -1, &result[0], size_needed, nullptr, nullptr);
 
     return result;
 }

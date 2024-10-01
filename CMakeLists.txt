@@ -8,7 +8,11 @@ set (CMAKE_CXX_STANDARD 20)
 add_compile_definitions (ELPP_THREAD_SAFE=1)
 add_compile_definitions (ELPP_FRESH_LOG_FILE=1)
 add_compile_definitions (ELPP_FEATURE_PERFORMANCE_TRACKING=1)
+if (WIN32)
+add_compile_definitions (ELPP_DEFAULT_LOG_FILE="c:\\tmp\\daisy.log")
+else()
 add_compile_definitions (ELPP_DEFAULT_LOG_FILE="/var/tmp/daisy.log")
+endif()
 
 include_directories (
     3rdparty/easyloggingpp/src

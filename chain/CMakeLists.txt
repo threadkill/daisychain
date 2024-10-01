@@ -5,10 +5,10 @@ add_compile_definitions (ELPP_NO_LOG_TO_FILE=1)
 
 if (APPLE)
 # suppresses ranlib warnings for no symbols found.
-SET(CMAKE_C_ARCHIVE_CREATE   "<CMAKE_AR> Scr <TARGET> <LINK_FLAGS> <OBJECTS>")
-SET(CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> Scr <TARGET> <LINK_FLAGS> <OBJECTS>")
-SET(CMAKE_C_ARCHIVE_FINISH   "<CMAKE_RANLIB> -no_warning_for_no_symbols -c <TARGET>")
-SET(CMAKE_CXX_ARCHIVE_FINISH "<CMAKE_RANLIB> -no_warning_for_no_symbols -c <TARGET>")
+set (CMAKE_C_ARCHIVE_CREATE   "<CMAKE_AR> Scr <TARGET> <LINK_FLAGS> <OBJECTS>")
+set (CMAKE_CXX_ARCHIVE_CREATE "<CMAKE_AR> Scr <TARGET> <LINK_FLAGS> <OBJECTS>")
+set (CMAKE_C_ARCHIVE_FINISH   "<CMAKE_RANLIB> -no_warning_for_no_symbols -c <TARGET>")
+set (CMAKE_CXX_ARCHIVE_FINISH "<CMAKE_RANLIB> -no_warning_for_no_symbols -c <TARGET>")
 endif()
 
 
@@ -102,6 +102,9 @@ else()
     install (TARGETS chain DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
 
+if (WIN32)
+qt_disable_unicode_defines (chain)
+endif()
 
-target_link_libraries (chain PRIVATE pthread daisychain_static QtNodes Qt6::Widgets)
+target_link_libraries (chain PRIVATE daisychain_static QtNodes Qt6::Widgets)
 set_target_properties (chain PROPERTIES CXX_VISIBILITY_PRESET "hidden")

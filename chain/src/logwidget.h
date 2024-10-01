@@ -21,6 +21,9 @@
 #include "logger.h"
 #include "lognotifier.h"
 #include <QtWidgets/QTextEdit>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 class LogWidget : public QTextEdit
@@ -46,10 +49,16 @@ private Q_SLOTS:
     void storeFileOffset();
 
 private:
-    int fd{};
     LogNotifier* notifier;
     std::string logfile;
     std::map<std::string, QAction*> actions_;
+#ifdef _WIN32
+    HANDLE fd{};
+    std::unordered_map<std::string, HANDLE> openfiles_;
+    std::unordered_map<std::string, off_t> offsets_;
+#else
+    int fd{};
     std::unordered_map<std::string, int> openfiles_;
     std::unordered_map<int, off_t > offsets_;
+#endif
 };

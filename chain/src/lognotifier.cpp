@@ -16,7 +16,11 @@
 
 #include "lognotifier.h"
 #include <QTimer>
+#ifndef _WIN32
 #include <unistd.h>
+#else
+#include <filesystem>
+#endif
 
 
 #ifdef __linux__
@@ -148,13 +152,88 @@ LogNotifier::monitor()
 
 #endif // ifdef __APPLE__
 
+#ifdef _WIN32
+
+LogNotifier::LogNotifier() : QObject(), keepalive (true)
+{
+}
+
+
+void
+LogNotifier::setLogFile (const std::string& filename)
+{
+    if (std::find (watch_files.begin(), watch_files.end(), filename) == watch_files.end()) {
+        watch_files.insert (filename);
+    }
+
+    if (log_dir) {
+        return;
+    }
+
+    std::filesystem::path path_ (filename);
+    auto directory = path_.parent_path().string();
+
+    log_dir = CreateFileA(
+        directory.c_str(),
+        FILE_LIST_DIRECTORY,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS,
+        nullptr);
+
+    if (log_dir == INVALID_HANDLE_VALUE) {
+        return;
+    }
+}
+
+
+void
+LogNotifier::monitor()
+{
+    char buffer[1024];
+    DWORD bytesReturned;
+
+    while (keepalive)
+    {
+        // Monitor the directory for changes
+        if (ReadDirectoryChangesW(
+                log_dir,                      // Directory handle
+                &buffer,                         // Output buffer
+                sizeof(buffer),                  // Size of the buffer
+                FALSE,                           // Do not monitor subdirectories
+                FILE_NOTIFY_CHANGE_LAST_WRITE,   // Watch for file changes
+                &bytesReturned,                  // Bytes returned
+                nullptr,                            // NULL for synchronous operation
+                nullptr) == 0)                      // NULL for no completion routine
+        {
+            return;
+        }
+
+        auto* fni = reinterpret_cast<FILE_NOTIFY_INFORMATION*>(buffer);
+        std::wstring changedFile(fni->FileName, fni->FileNameLength / sizeof(WCHAR));
+        std::string changedFileName (changedFile.begin(), changedFile.end());
+
+        // Check if the change was on the specific file we are watching
+        if (watch_files.contains (changedFileName)) {
+            Q_EMIT (fileChanged (changedFileName));
+        }
+    }
+
+} // LogNotifier::monitor
+#endif
+
 
 LogNotifier::~LogNotifier()
 {
+#ifdef _WIN32
+    CloseHandle (log_dir);
+#else
     for (const auto& watch_fd : watch_fds) {
         ::close (watch_fd.second);
     }
     close (dev_fd);
+#endif
 }
 
 

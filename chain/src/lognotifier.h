@@ -17,7 +17,11 @@
 #pragma once
 
 #include <unordered_map>
+#include <unordered_set>
 #include <QObject>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 class LogNotifier final : public QObject
@@ -39,8 +43,14 @@ Q_SIGNALS:
     void fileChanged (const std::string&);
 
 private:
-    int dev_fd;
     bool keepalive;
+#ifdef _WIN32
+    std::unordered_map<std::string, HANDLE> watch_fds;
+    std::unordered_set<std::string> watch_files;
+    HANDLE log_dir = nullptr;
+#else
+    int dev_fd;
     std::unordered_map<std::string, int> watch_fds;
     std::unordered_map<int, std::string> watch_files;
+#endif
 };

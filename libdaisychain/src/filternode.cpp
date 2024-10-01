@@ -45,9 +45,9 @@ FilterNode::FilterNode() :
 
 FilterNode::FilterNode (string filter, bool is_regex = false, bool negate = false) :
     Node(),
-    filter_ (std::move (filter)),
     regex_ (is_regex),
-    invert_ (negate)
+    invert_ (negate),
+    filter_ (std::move (filter))
 {
     type_ = DaisyNodeType::DC_FILTER;
     set_name (DaisyNodeNameByType[type_]);
@@ -110,7 +110,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                 match = true;
             }
 
-            if ((match && !invert_) || (!match && invert_)) {
+            if (match ^ invert_) {
                 LDEBUG << "Matched: " << input;
                 OpenOutputs (sandbox);
                 WriteOutputs (input);

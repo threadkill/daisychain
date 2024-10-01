@@ -318,7 +318,7 @@ bool
 Graph::Execute (const string& input, json& env)
 {
     TIMED_FUNC (timerObj);
-    setbuf (stdout, nullptr);
+    //setbuf (stdout, nullptr);
 
     if (!PrepareFileSystem()) {
         return false;
