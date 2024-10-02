@@ -19,7 +19,7 @@
 
 
 namespace chain {
-static QFont&
+inline QFont&
 chainfont()
 {
     static int id_regular = QFontDatabase::addApplicationFont (":/MesloLGS NF Regular.ttf");

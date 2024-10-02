@@ -459,6 +459,11 @@ Graph::Test()
 void
 Graph::Terminate()
 {
+    for (const auto& [name, node] : nodes_) {
+        node->Stop();
+    }
+
+    running_ = false;
 #ifdef _WIN32
 #else
     if (!process_group_ && !running_)

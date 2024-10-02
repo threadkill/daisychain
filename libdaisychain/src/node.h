@@ -27,6 +27,7 @@
 #ifdef _WIN32
 #include <io.h>
 #include <windows.h>
+#include <atomic>
 #else
 #include <sys/poll.h>
 #include <wordexp.h>
@@ -92,6 +93,7 @@ public:
         totalbytesread_ (0),
         totalbyteswritten_ (0)
     {
+        terminate_.store (false);
     }
 
 
@@ -152,6 +154,7 @@ public:
         });
     }
 
+
     void Start (vector<string>& inputs, const string& sandbox, json& vars)
     {
         thread_ = std::thread ([this, &inputs, &sandbox, &vars]() {
@@ -162,11 +165,18 @@ public:
         });
     }
 
+
     void Join()
     {
         if (thread_.joinable()) {
             thread_.join();
         }
+    }
+
+
+    void Stop()
+    {
+        terminate_.store (true);
     }
 
 
@@ -179,6 +189,7 @@ public:
 
         do {
             eof = ReadInputs (inputs);
+            if (terminate_.load()) return false;
         } while (batch_ && eof != -1);
 
         if (batch_) {
@@ -317,6 +328,8 @@ public:
 
     int ReadInputs (vector<string>& inputs)
     {
+        if (terminate_.load()) return -1;
+
         const uint32_t BUFFSIZE = 8192;
         char cbuffer[BUFFSIZE + 1];
         string input;
@@ -667,6 +680,7 @@ protected:
     map<const string, HANDLE> fd_in_;
     map<const string, HANDLE> fd_out_;
     std::thread thread_;
+    std::atomic<bool> terminate_;
 #else
     map<const string, int> fd_in_;
     map<const string, int> fd_out_;

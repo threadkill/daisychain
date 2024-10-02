@@ -490,6 +490,8 @@ WatchNode::InitNotify()
 {
     bool stat = true;
 
+    handle_ = nullptr;
+
     return stat;
 } // WatchNode::InitNotify
 
@@ -540,7 +542,11 @@ WatchNode::Monitor (const string& sandbox)
     char buffer[1024];
     FILE_NOTIFY_INFORMATION *pNotify;
 
-    while (TRUE) {
+    while (!terminate_.load()) {
+        if (!handle_) {
+            std::this_thread::sleep_for (std::chrono::milliseconds(200));
+            continue;
+        }
         if (ReadDirectoryChangesW(
                 handle_,
                 buffer,
@@ -591,12 +597,17 @@ WatchNode::Monitor (const string& sandbox)
 
                 if (transmit) {
                     OpenOutputs (sandbox);
-                    WriteOutputs (filename);
+                    if (terminate_.load()) {
+                        WriteOutputs ("EOF");
+                    }
+                    else {
+                        WriteOutputs (filename);
+                    }
                     CloseOutputs();
                 }
 
                 offset += pNotify->NextEntryOffset;
-            } while (pNotify->NextEntryOffset != 0);
+            } while (pNotify->NextEntryOffset != 0 && !terminate_.load());
         }
         else {
             LERROR << "ReadDirectoryChangesW failed with error: " << GetLastError();

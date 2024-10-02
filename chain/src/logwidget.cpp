@@ -35,7 +35,8 @@ LogWidget::LogWidget (std::string filename, QWidget* parent) :
     notifier{nullptr},
     logfile (std::move (filename))
 {
-    auto highlighter = new LogHighlighter (this->document());
+    auto highlighter = new LogHighlighter();
+    highlighter->setDocument (this->document());
 
     setPalette (darkPalette());
 

@@ -80,7 +80,7 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
         }
 
         for (auto& input : inputs) {
-            if (input != "EOF") {
+            if (input != "EOF" && !terminate_.load()) {
                 stat = run_command (input, sandbox);
 
                 if (!stat)
@@ -90,7 +90,7 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
     }
     else {
         // tokenized processing which continues until EOF.
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     // performs open/write/close on outputs.

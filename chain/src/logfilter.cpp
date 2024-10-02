@@ -68,7 +68,7 @@ LogFilter::dispatch (el::base::type::string_t&& logline) noexcept
         BOOL result = WriteFile(
             fd,
             logline.c_str(),
-            strlen(logline.c_str()),
+            static_cast<DWORD>(strlen (logline.c_str())),
             &bytesWritten,
             nullptr);
 

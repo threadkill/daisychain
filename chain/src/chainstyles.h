@@ -24,7 +24,7 @@ using QtNodes::NodeStyle;
 using QtNodes::ConnectionStyle;
 
 
-inline static QPalette
+inline QPalette
 darkPalette()
 {
     QColor darkGray (53, 53, 53);
@@ -60,7 +60,7 @@ darkPalette()
 } // darkPalette
 
 
-static void
+inline void
 setNodeStyle()
 {
     GraphicsViewStyle::setStyle (

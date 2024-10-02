@@ -122,7 +122,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         }
     }
     else {
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     bool match = false;

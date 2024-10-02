@@ -229,6 +229,8 @@ GraphModel::connectDaisyNode (const ConnectionId& connection)
 
     if (!connected) {
         auto deleted = deleteConnection (connection);
+        LWARN << "Connection failed: " << o_node->id() << " -> " << i_node->id();
+        LERROR_IF (!deleted) << "Unable to disconnect node in UI.";
     }
 } // GraphModel::connectDaisyNode
 
@@ -351,7 +353,7 @@ GraphModel::emitAll()
 int
 GraphModel::createNodeFromNode (const std::shared_ptr<daisychain::Node>& node)
 {
-    NodeId qtnode;
+    NodeId qtnode{};
     ChainModel* datamodel = nullptr;
 
     auto xy = node->position();

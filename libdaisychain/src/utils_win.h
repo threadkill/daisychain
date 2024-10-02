@@ -47,7 +47,7 @@ mkdtemp_ (const std::string& templateStr) {
 
         // Replace the 'XXXXXX' mask with the random string
         std::string tempdir = templateStr;
-        std::string temppath (getenv ("TEMP"));
+        std::string temppath (std::getenv ("TEMP"));
         temppath += "\\";
         tempdir.replace (pos, maskLength, randomStr);
         temppath += tempdir;

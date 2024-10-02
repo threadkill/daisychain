@@ -2,6 +2,9 @@ cmake_minimum_required (VERSION 3.21.1)
 project (chain)
 
 add_compile_definitions (ELPP_NO_LOG_TO_FILE=1)
+if (WIN32)
+add_compile_options (/W4)
+endif()
 
 if (APPLE)
 # suppresses ranlib warnings for no symbols found.
@@ -17,7 +20,6 @@ find_package (Qt6 COMPONENTS Widgets REQUIRED)
 set (CMAKE_AUTOMOC ON)
 set (CMAKE_AUTORCC ON)
 
-
 # NodeEditor
 set (CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set (BUILD_SHARED_LIBS OFF)
@@ -26,7 +28,7 @@ add_subdirectory (
     ${CMAKE_CURRENT_BINARY_DIR}/nodeeditor
     EXCLUDE_FROM_ALL
 )
-
+target_compile_options (QtNodes INTERFACE "/W4")
 
 # Source
 include_directories (
@@ -89,20 +91,22 @@ if (APPLE)
             WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX})"
         COMPONENT Runtime
     )
+    # Need to do this twice to get it to succeed.
     install(
         CODE "
         message (STATUS \"Running ${Qt6_TOOL_PATH} command...\")
         execute_process (
             COMMAND ${Qt6_TOOL_PATH} ${MACOSX_BUNDLE_BUNDLE_NAME}.app \
                 -always-overwrite -dmg
-            WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX})
-    ")
+            WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX})"
+    )
 else()
     add_executable (chain ${chain_SOURCES})
     install (TARGETS chain DESTINATION ${CMAKE_INSTALL_PREFIX})
 endif()
 
 if (WIN32)
+# This has to occur after the executable is defined and sets the charset to Utf8.
 qt_disable_unicode_defines (chain)
 endif()
 

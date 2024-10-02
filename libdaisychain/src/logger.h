@@ -33,7 +33,7 @@
 void configureLogger (el::Level level = el::Level::Error);
 
 
-static void
+inline void
 configureLogger (const std::string& level)
 {
     if (level == "info") {

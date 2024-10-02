@@ -47,7 +47,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         }
     }
     else {
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     OpenNextOutput (sandbox);
@@ -132,6 +132,7 @@ DistroNode::WriteNextOutput (const string& output)
     auto tokensize = static_cast<DWORD>(token.size());
 
     do {
+        if (terminate_.load()) return;
         ret = WriteFile (handle, token.c_str(), tokensize, &numbytes, nullptr);
 
         if (!ret) {
@@ -168,7 +169,7 @@ DistroNode::WriteAnyOutput (const string& output)
             else if (numbytes) {
                 token = output.substr (numbytes) + '\n';
             }
-        } while (numbytes < tokensize);
+        } while (numbytes < tokensize && !terminate_.load());
 
         if (numbytes == tokensize) {
             return;
