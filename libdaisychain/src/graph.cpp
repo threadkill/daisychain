@@ -215,52 +215,6 @@ Graph::PrepareFileSystem()
         }
     }
 
-    for (const auto& [parent, child] : edges_) {
-        auto uuidpair = parent + "." + child;
-        std::string pipename = Node::get_pipename (sandbox_, uuidpair);
-
-        HANDLE hwrite = CreateNamedPipeA(
-            pipename.c_str(),
-            PIPE_ACCESS_OUTBOUND,
-            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE| PIPE_NOWAIT,
-            1,
-            0,
-            0,
-            0,
-            nullptr);
-
-        if (hwrite == INVALID_HANDLE_VALUE) {
-            LERROR << "Error creating named pipe: " << pipename << " " << GetLastError();
-            status = false;
-            break;
-        }
-
-        handles_.push_back (hwrite);
-        nodes_[parent]->set_output_handle (uuidpair, hwrite);
-
-        HANDLE hread = CreateFileA(
-            pipename.c_str(),
-            GENERIC_READ,
-            0,
-            nullptr,
-            OPEN_EXISTING,
-            0,
-            nullptr
-        );
-
-        if (hread == INVALID_HANDLE_VALUE) {
-            LERROR << "Failed to open pipe: " << pipename << " " << GetLastError();
-            status = false;
-            break;
-        }
-
-        nodes_[child]->set_input_handle (uuidpair, hread);
-        handles_.push_back (hread);
-    }
-
-    for (const auto& [name, node]: nodes_) {
-        node->OpenPipes();
-    }
 #else
     if (sandbox_.empty()) {
         char temp[] = "/tmp/daisy-XXXXXX";
@@ -432,7 +386,7 @@ Graph::Execute (const string& input, json& env)
 
     running_ = false;
 
-    CloseHandles();
+    //CloseHandles();
 
     return true;
 } // Graph::Execute
@@ -502,11 +456,9 @@ void
 Graph::CloseHandles()
 {
 #ifdef _WIN32
-    for (const auto handle_: handles_) {
-        CloseHandle (handle_);
+    for (const auto& [name, node]: nodes_) {
+        node->ClearHandles();
     }
-
-    handles_.clear();
 #endif
 }
 
@@ -522,7 +474,7 @@ Graph::Cleanup()
     int status = DeleteDirectoryRecursively (sandbox_);
     status == 0 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
 
-    CloseHandles();
+    // CloseHandles();
 #else
     auto rmdirtree = [] (const char* path, const struct stat* buf, int type, struct FTW* ftwb) {
         int stat = std::remove (path);

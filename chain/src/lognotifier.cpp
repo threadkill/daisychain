@@ -15,6 +15,8 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "lognotifier.h"
+
+#include <QThread>
 #include <QTimer>
 #ifndef _WIN32
 #include <unistd.h>
@@ -204,8 +206,8 @@ LogNotifier::monitor()
                 FALSE,                           // Do not monitor subdirectories
                 FILE_NOTIFY_CHANGE_LAST_WRITE,   // Watch for file changes
                 &bytesReturned,                  // Bytes returned
-                nullptr,                            // NULL for synchronous operation
-                nullptr) == 0)                      // NULL for no completion routine
+                nullptr,                         // NULL for synchronous operation
+                nullptr) == 0)                   // NULL for no completion routine
         {
             return;
         }
@@ -218,6 +220,8 @@ LogNotifier::monitor()
         if (watch_files.contains (changedFileName)) {
             Q_EMIT (fileChanged (changedFileName));
         }
+
+        QThread::msleep (100);
     }
 
 } // LogNotifier::monitor

@@ -52,13 +52,13 @@ LogWidget::LogWidget (std::string filename, QWidget* parent) :
     setDocumentTitle (QString::fromStdString (logfile));
 
     notifier = new LogNotifier();
-    auto thread = new QThread();
+    thread_ = new QThread();
 
-    connect (thread, &QThread::started, notifier, &LogNotifier::monitor);
+    connect (thread_, &QThread::started, notifier, &LogNotifier::monitor);
     connect (notifier, &LogNotifier::fileChanged, this, &LogWidget::readLogFile);
 
-    notifier->moveToThread (thread);
-    thread->start();
+    notifier->moveToThread (thread_);
+    thread_->start();
 
     setContextMenuPolicy (Qt::CustomContextMenu);
 
@@ -103,6 +103,7 @@ LogWidget::~LogWidget()
         ::close (handle);
 #endif
     }
+    thread_->quit();
 }
 
 

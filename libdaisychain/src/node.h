@@ -147,8 +147,10 @@ public:
     void Start (const string& sandbox, json& vars)
     {
         thread_ = std::thread ([this, &sandbox, &vars]() {
+            this->OpenPipes (sandbox);
             auto stat = this->Execute (sandbox, vars);
-            this->ClearHandles();
+            this->ClosePipes();
+            //while (!this->terminate_.load()) {}
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -158,8 +160,10 @@ public:
     void Start (vector<string>& inputs, const string& sandbox, json& vars)
     {
         thread_ = std::thread ([this, &inputs, &sandbox, &vars]() {
+            this->OpenPipes (sandbox);
             auto stat = this->Execute (inputs, sandbox, vars);
-            this->ClearHandles();
+            this->ClosePipes();
+            //while (!this->terminate_.load()) {}
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -301,110 +305,7 @@ public:
     } // CloseOutputs
 
 
-#ifdef _WIN32
-    void OpenPipes()
-    {
-        for (const auto& fifo : outputs_) {
-            auto handle = fd_out_[fifo];
-
-            BOOL connected = ConnectNamedPipe (handle, nullptr) ? TRUE : (GetLastError() == ERROR_PIPE_CONNECTED);
-
-            if (!connected) {
-                LERROR << LOGNODE << "Error connecting to named pipe: " << fifo;
-            }
-            else {
-                LDEBUG << LOGNODE << "Connected to named pipe: " << fifo;
-            }
-        }
-    } // OpenPipes
-
-
-    void ClearHandles()
-    {
-        fd_in_.clear();
-        fd_out_.clear();
-    } // ClearHandles
-
-
-    int ReadInputs (vector<string>& inputs)
-    {
-        if (terminate_.load()) return -1;
-
-        const uint32_t BUFFSIZE = 8192;
-        char cbuffer[BUFFSIZE + 1];
-        string input;
-
-        for (const auto& [fifo, handle] : fd_in_) {
-            DWORD dwRead = 0;
-            BOOL fSuccess = ReadFile (handle, cbuffer, BUFFSIZE, &dwRead, nullptr);
-
-            if (!fSuccess || dwRead == 0) {
-                DWORD err = GetLastError();
-                if (err == ERROR_MORE_DATA) {
-                    // Handle if the message is larger than the buffer
-                    LERROR << LOGNODE << "message to large.";
-                    continue;
-                }
-                else if (err == ERROR_BROKEN_PIPE) {
-                    // Handle pipe disconnection
-                    LERROR << LOGNODE << "broken pipe.";
-                    eofs_++;
-                    continue;
-                }
-                else {
-                    LERROR << LOGNODE << "ReadFile failed on: " << fifo
-                           << ". Error: " << err;
-                    continue;
-                }
-            }
-
-            cbuffer[dwRead] = '\0';
-            input += cbuffer;
-            LDEBUG << LOGNODE << "read input: " << input;
-            totalbytesread_ += dwRead;
-        }
-
-        m_split_input (input, inputs);
-
-        if (auto count = ranges::count (inputs, "EOF")) {
-            eofs_ += static_cast<int> (count);
-            LDEBUG << LOGNODE << "EOF COUNT: " << eofs_;
-        }
-
-        return (eofs_ == fd_in_.size()) ? -1 : eofs_;
-    }
-
-    virtual void WriteOutputs (const string& output)
-    {
-        string token = output + '\n';
-
-        for (const auto& [fifo, handle] : fd_out_) {
-            DWORD dwWritten = 0;
-            BOOL fSuccess = WriteFile (
-                handle,
-                token.c_str(),
-                static_cast<DWORD> (token.size()),
-                &dwWritten,
-                nullptr);
-
-            if (!fSuccess || dwWritten == 0) {
-                DWORD err = GetLastError();
-                if (err == ERROR_NO_DATA) {
-                    // The pipe is being closed
-                    continue;
-                }
-                else {
-                    LERROR << LOGNODE << "WriteFile failed on: " << fifo
-                           << ". Error: " << err;
-                    continue;
-                }
-            }
-
-            totalbyteswritten_ += dwWritten;
-        }
-    }
-
-#else
+#ifndef _WIN32
     int ReadInputs (vector<string>& inputs)
     {
         struct pollfd pfds[fd_in_.size()];
@@ -511,6 +412,214 @@ public:
             }
         } while (byteswritten < totalbytes);
     } // WriteOutputs
+
+#else
+    void OpenPipes (const string& sandbox_)
+    {
+        {
+            std::unique_lock<std::mutex> lock (syncMutex);
+
+            for (const auto& fifo : outputs_) {
+                auto pipename = get_pipename (sandbox_, fifo);
+
+                HANDLE hwrite = CreateNamedPipeA(
+                    pipename.c_str(),
+                    PIPE_ACCESS_OUTBOUND,
+                    PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE| PIPE_WAIT,
+                    1,
+                    0,
+                    0,
+                    0,
+                    nullptr);
+
+                if (hwrite == INVALID_HANDLE_VALUE) {
+                    LERROR << "Error creating named pipe: " << pipename << " " << GetLastError();
+                    break;
+                }
+
+                fd_out_[fifo] = hwrite;
+            }
+
+            nodesReady[id_] = true;
+            syncCV.notify_all();
+        }
+
+        for (const auto& fifo : outputs_) {
+            auto pipename = get_pipename (sandbox_, fifo);
+            BOOL connected = ConnectNamedPipe (fd_out_[fifo], nullptr);
+
+            if (!connected && GetLastError() != ERROR_PIPE_CONNECTED) {
+                LERROR << LOGNODE << "Error connecting to named pipe: " << pipename;
+            }
+            else {
+                LDEBUG << LOGNODE << "Connected to named pipe: " << pipename;
+            }
+        }
+
+        for (const auto& fifo : inputs_) {
+            auto pipename = get_pipename (sandbox_, fifo);
+
+            {
+                std::unique_lock<std::mutex> lock(syncMutex);
+                vector<string> tokens;
+                m_split (fifo, ".", tokens);
+                string parentname = tokens[0];
+                syncCV.wait (lock, [&]() { return nodesReady[parentname]; });
+            }
+
+            while (!terminate_.load()) {
+                HANDLE hread = CreateFileA(
+                    pipename.c_str(),
+                    GENERIC_READ,
+                    0,
+                    nullptr,
+                    OPEN_EXISTING,
+                    0,
+                    nullptr
+                );
+
+                if (hread != INVALID_HANDLE_VALUE) {
+                    LDEBUG << LOGNODE << "Handle created: " << fifo;
+                    fd_in_[fifo] = hread;
+                    break;
+                }
+
+                DWORD error = GetLastError();
+                if (error != ERROR_PIPE_BUSY && error != ERROR_FILE_NOT_FOUND) {
+                    LERROR << LOGNODE << "Failed to open pipe: " << pipename << " " << GetLastError();
+                    return;
+                }
+
+                if (!WaitNamedPipeA (pipename.c_str(), 5000)) {
+                    LDEBUG << LOGNODE << "WaitNamedPipe failed: " << pipename;
+                }
+            }
+        }
+    } // OpenPipes
+
+
+    void ClosePipes()
+    {
+        for (const auto& fifo : outputs_) {
+            auto handle = fd_out_[fifo];
+
+            BOOL disconnected = DisconnectNamedPipe (handle);
+
+            if (!disconnected) {
+                LERROR << LOGNODE << "Error disconnecting named pipe: " << fifo;
+            }
+            else {
+                LDEBUG << LOGNODE << "Disconnected named pipe: " << fifo;
+            }
+        }
+        ClearHandles();
+    } // ClosePipes
+
+
+    void ClearHandles()
+    {
+        fd_in_.clear();
+        fd_out_.clear();
+    } // ClearHandles
+
+
+    int ReadInputs (vector<string>& inputs)
+    {
+        if (terminate_.load())
+            return -1;
+
+        constexpr uint32_t BUFFSIZE = 8192;
+        char cbuffer[BUFFSIZE + 1];
+        string input;
+
+        for (const auto& [fifo, handle] : fd_in_) {
+
+            DWORD bytesAvailable = 0;
+            bool stat = PeekNamedPipe(
+                handle,
+                nullptr,
+                0,
+                nullptr,
+                &bytesAvailable,
+                nullptr
+            );
+
+            if (!stat) {
+                DWORD error = GetLastError();
+                if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) {
+                    LERROR << LOGNODE << "broken pipe.";
+                    break;
+                }
+                else {
+                    break;
+                }
+            }
+
+            if (bytesAvailable == 0) {
+                continue;
+            }
+
+            do {
+                DWORD dwRead = 0;
+                stat = ReadFile (handle, cbuffer, BUFFSIZE, &dwRead, nullptr);
+
+                auto error = GetLastError();
+                if (!stat && error != ERROR_MORE_DATA) {
+                    if (error == ERROR_BROKEN_PIPE) {
+                        LERROR << LOGNODE << "broken pipe.";
+                    }
+                    break;
+                }
+
+                if (dwRead > 0) {
+                    cbuffer[dwRead] = '\0';
+                    input += cbuffer;
+                    totalbytesread_ += dwRead;
+                }
+
+                LDEBUG << LOGNODE << "read input: " << input;
+            } while (!stat && GetLastError() == ERROR_MORE_DATA);
+        }
+
+        m_split_input (input, inputs);
+
+        if (auto count = ranges::count (inputs, "EOF")) {
+            eofs_ += static_cast<int> (count);
+            LDEBUG << LOGNODE << "EOF COUNT: " << eofs_;
+        }
+
+        return (eofs_ == fd_in_.size()) ? -1 : eofs_;
+    } // ReadInputs
+
+
+    virtual void WriteOutputs (const string& output)
+    {
+        string token = output + '\n';
+
+        for (const auto& [fifo, handle] : fd_out_) {
+            DWORD write = 0;
+            size_t written = 0;
+
+            while (written < token.size() && !terminate_.load()) {
+                BOOL fSuccess = WriteFile (
+                    handle,
+                    token.data() + written,
+                    static_cast<DWORD> (token.size() - written),
+                    &write,
+                    nullptr);
+
+                if (!fSuccess) {
+                    break;
+                }
+
+                written += write;
+                totalbyteswritten_ += write;
+            }
+
+            FlushFileBuffers (handle);
+        }
+    } // WriteOutputs
+
 #endif
 
 
@@ -518,7 +627,6 @@ public:
     {
         CloseOutputs();
         CloseInputs();
-        ClearHandles();
     } // Cleanup
 
 
@@ -547,18 +655,6 @@ public:
 
     void set_outputfile (const string& output) { outputfile_ = output; }
     string outputfile() { return outputfile_; }
-
-#ifdef _WIN32
-    void set_input_handle (const string& uuidpair, HANDLE input_handle)
-    {
-        fd_in_[uuidpair] = input_handle;
-    }
-
-    void set_output_handle (const string& uuidpair, HANDLE output_handle)
-    {
-        fd_out_[uuidpair] = output_handle;
-    }
-#endif
 
     int input_index (const string& id)
     {
@@ -681,6 +777,9 @@ protected:
     map<const string, HANDLE> fd_out_;
     std::thread thread_;
     std::atomic<bool> terminate_;
+    inline static std::mutex syncMutex;
+    inline static std::condition_variable syncCV;
+    inline static std::map<std::string, bool> nodesReady;
 #else
     map<const string, int> fd_in_;
     map<const string, int> fd_out_;

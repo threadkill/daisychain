@@ -106,12 +106,11 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
 
             inputs.clear();
 
-            if (eofs_ == fd_in_.size()) {
+            if (eofs_ == fd_in_.size() || terminate_.load()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+
+            ReadInputs (inputs);
         }
 
         CloseInputs();
@@ -167,7 +166,15 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
     auto output = input;
 
 #ifdef _WIN32
-    if (!SetEnvironmentVariable ("INPUT", shell_expand (input).c_str()))
+    // replacing newline delimiters with spaces before shell expansion.
+    auto input_ = input;
+    for (char& ch : input_) {
+        if (ch == '\n') {
+            ch = ' ';
+        }
+    }
+
+    if (!SetEnvironmentVariable ("INPUT", shell_expand (input_).c_str()))
 #else
     if (setenv ("INPUT", shell_expand (input).c_str(), true) < 0)
 #endif
@@ -196,11 +203,11 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         return true;
     }
 
-    // setting IFS explicitly to newline-only facilitates handling paths with spaces.
-    // redirecting stderr to stdout for log capture.
 #ifdef _WIN32
     FILE* fp = _popen (command_.c_str(), "r");
 #else
+    // setting IFS explicitly to newline-only facilitates handling paths with spaces.
+    // redirecting stderr to stdout for log capture.
     string cmd = "IFS=\"\n\";" + command_ + " 2>&1";
     FILE* fp = popen (cmd.c_str(), "r");
 #endif

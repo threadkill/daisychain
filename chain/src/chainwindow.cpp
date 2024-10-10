@@ -988,5 +988,5 @@ void
 ChainWindow::finished()
 {
     QMessageBox::information (this, tr ("Daisy"), tr ("Finished."), QMessageBox::Ok);
-    switchTab (tabs_->currentIndex());
+    //switchTab (tabs_->currentIndex());
 } // ChainWindow::finished

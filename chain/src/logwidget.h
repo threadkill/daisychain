@@ -52,6 +52,7 @@ private:
     LogNotifier* notifier;
     std::string logfile;
     std::map<std::string, QAction*> actions_;
+    QThread* thread_;
 #ifdef _WIN32
     HANDLE fd{};
     std::unordered_map<std::string, HANDLE> openfiles_;
