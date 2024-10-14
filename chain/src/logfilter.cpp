@@ -56,6 +56,8 @@ LogFilter::set_logfile (const std::string& filename)
         std::cerr << "Error: Unable to open the file for writing." << std::endl;
         return;
     }
+
+    set_pattern ("(" + logfile_ + ")");
 }
 
 
@@ -75,6 +77,8 @@ LogFilter::dispatch (el::base::type::string_t&& logline) noexcept
         if (!result) {
             std::cerr << "Error: Unable to write to the file." << std::endl;
         }
+
+        //FlushFileBuffers (fd);
     }
 }
 

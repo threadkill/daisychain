@@ -127,6 +127,8 @@ public:
 
     bool test_flag() const;
 
+    [[nodiscard]] string logfile() const { return sandbox_ + ".log"; }
+
     [[nodiscard]] bool running() const { return running_; }
 
     const map<string, std::shared_ptr<Node>>& nodes();

@@ -298,15 +298,19 @@ Graph::Execute (const string& input, json& env)
         LDEBUG << uuid << " - " << nodes_[uuid]->name();
     }
 
+    Node::nodesReady.clear();
+
     for (const auto& uuid : ordered_) {
         auto node_ = nodes_[uuid];
         if (node_->is_root()) {
             // root nodes receive initial input.
             LDEBUG << "Root node: " << node_->name();
-            node_->Start (inputs, sandbox_, merged_env);
+            auto log = logfile();
+            node_->Start (inputs, sandbox_, merged_env, log);
         }
         else {
-            node_->Start (sandbox_, merged_env);
+            auto log = logfile();
+            node_->Start (sandbox_, merged_env, log);
         }
     }
 
@@ -386,8 +390,6 @@ Graph::Execute (const string& input, json& env)
 
     running_ = false;
 
-    //CloseHandles();
-
     return true;
 } // Graph::Execute
 
@@ -452,17 +454,6 @@ Graph::Terminate()
 }
 
 
-void
-Graph::CloseHandles()
-{
-#ifdef _WIN32
-    for (const auto& [name, node]: nodes_) {
-        node->ClearHandles();
-    }
-#endif
-}
-
-
 bool
 Graph::Cleanup()
 {
@@ -473,8 +464,6 @@ Graph::Cleanup()
 #ifdef _WIN32
     int status = DeleteDirectoryRecursively (sandbox_);
     status == 0 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
-
-    // CloseHandles();
 #else
     auto rmdirtree = [] (const char* path, const struct stat* buf, int type, struct FTW* ftwb) {
         int stat = std::remove (path);

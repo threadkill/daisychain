@@ -144,26 +144,26 @@ public:
     }
 
 
-    void Start (const string& sandbox, json& vars)
+    void Start (const string& sandbox, json& vars, const string& threadname)
     {
-        thread_ = std::thread ([this, &sandbox, &vars]() {
+        thread_ = std::thread ([this, &sandbox, &vars, threadname]() {
+            el::Helpers::setThreadName (threadname);
             this->OpenPipes (sandbox);
             auto stat = this->Execute (sandbox, vars);
             this->ClosePipes();
-            //while (!this->terminate_.load()) {}
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
     }
 
 
-    void Start (vector<string>& inputs, const string& sandbox, json& vars)
+    void Start (vector<string>& inputs, const string& sandbox, json& vars, const string& threadname)
     {
-        thread_ = std::thread ([this, &inputs, &sandbox, &vars]() {
+        thread_ = std::thread ([this, &inputs, &sandbox, &vars, threadname]() {
+            el::Helpers::setThreadName (threadname);
             this->OpenPipes (sandbox);
             auto stat = this->Execute (inputs, sandbox, vars);
             this->ClosePipes();
-            //while (!this->terminate_.load()) {}
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -503,24 +503,29 @@ public:
         for (const auto& fifo : outputs_) {
             auto handle = fd_out_[fifo];
 
+            FlushFileBuffers (handle);
             BOOL disconnected = DisconnectNamedPipe (handle);
 
             if (!disconnected) {
                 LERROR << LOGNODE << "Error disconnecting named pipe: " << fifo;
             }
             else {
-                LDEBUG << LOGNODE << "Disconnected named pipe: " << fifo;
+                LDEBUG << LOGNODE << "Closed output named pipe: " << fifo;
+                CloseHandle (handle);
             }
         }
-        ClearHandles();
-    } // ClosePipes
 
+        for (const auto& fifo : inputs_) {
+            auto handle = fd_in_[fifo];
+            CloseHandle (handle);
+        }
 
-    void ClearHandles()
-    {
         fd_in_.clear();
         fd_out_.clear();
-    } // ClearHandles
+        eofs_ = 0;
+        totalbytesread_ = 0;
+        totalbyteswritten_ = 0;
+    } // ClosePipes
 
 
     int ReadInputs (vector<string>& inputs)
@@ -780,6 +785,7 @@ protected:
     inline static std::mutex syncMutex;
     inline static std::condition_variable syncCV;
     inline static std::map<std::string, bool> nodesReady;
+    friend class Graph;
 #else
     map<const string, int> fd_in_;
     map<const string, int> fd_out_;

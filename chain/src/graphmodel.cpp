@@ -32,7 +32,7 @@ GraphModel::GraphModel (std::shared_ptr<QtNodes::NodeDelegateModelRegistry> regi
 {
     graph_ = std::make_shared<daisychain::Graph>();
     graph_->PrepareFileSystem();
-    graphlog_ = graph_->sandbox() + ".log";
+    graphlog_ = graph_->logfile();
 
     if (std::ofstream log_ (graphlog_.c_str()); log_) {
         log_.close();
