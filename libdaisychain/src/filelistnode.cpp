@@ -22,7 +22,7 @@ namespace daisychain {
 using namespace std;
 
 
-FileListNode::FileListNode() : Node()
+FileListNode::FileListNode()
 {
     type_ = DaisyNodeType::DC_FILELIST;
     set_name (DaisyNodeNameByType[type_]);

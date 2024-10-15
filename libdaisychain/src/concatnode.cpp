@@ -22,7 +22,7 @@ namespace daisychain {
 using namespace std;
 
 
-ConcatNode::ConcatNode() : Node()
+ConcatNode::ConcatNode()
 {
     type_ = DaisyNodeType::DC_CONCAT;
     set_name (DaisyNodeNameByType[type_]);
@@ -56,9 +56,7 @@ ConcatNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
         CloseInputs();
     }

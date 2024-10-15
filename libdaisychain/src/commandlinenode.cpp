@@ -23,14 +23,15 @@ namespace daisychain {
 using namespace std;
 
 
-CommandLineNode::CommandLineNode() : Node()
+CommandLineNode::CommandLineNode()
 {
     type_ = DaisyNodeType::DC_COMMANDLINE;
     set_name (DaisyNodeNameByType[type_]);
 }
 
 
-CommandLineNode::CommandLineNode (string cmd) : Node(), command_ (std::move (cmd))
+CommandLineNode::CommandLineNode (string cmd) :
+    command_ (std::move (cmd))
 {
     type_ = DaisyNodeType::DC_COMMANDLINE;
     set_name (DaisyNodeNameByType[type_]);

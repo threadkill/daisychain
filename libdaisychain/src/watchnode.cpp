@@ -23,7 +23,7 @@ using namespace std;
 using namespace filesystem;
 
 
-WatchNode::WatchNode() : Node(),
+WatchNode::WatchNode() :
     passthru_ (false)
 {
     type_ = DaisyNodeType::DC_WATCH;

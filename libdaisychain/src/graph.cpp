@@ -298,7 +298,8 @@ Graph::Execute (const string& input, json& env)
         LDEBUG << uuid << " - " << nodes_[uuid]->name();
     }
 
-    Node::nodesReady.clear();
+    Node::nodes_ready.clear();
+    Node::nodecount = 0;
 
     for (const auto& uuid : ordered_) {
         auto node_ = nodes_[uuid];

@@ -35,7 +35,6 @@ using namespace std;
 
 
 FilterNode::FilterNode() :
-    Node(),
     regex_ (false), invert_ (false)
 {
     type_ = DaisyNodeType::DC_FILTER;
@@ -44,7 +43,6 @@ FilterNode::FilterNode() :
 
 
 FilterNode::FilterNode (string filter, bool is_regex = false, bool negate = false) :
-    Node(),
     regex_ (is_regex),
     invert_ (negate),
     filter_ (std::move (filter))
@@ -103,7 +101,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                 match = std::regex_match (input, expr);
             }
 #ifdef _WIN32
-            else if (PathMatchSpec (filter_.c_str(), input.c_str())) {
+            else if (PathMatchSpec (input.c_str(), filter_.c_str())) {
 #else
             else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
 #endif
@@ -131,14 +129,14 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                         match = std::regex_match (input, expr);
                     }
 #ifdef _WIN32
-                    else if (PathMatchSpec (filter_.c_str(), input.c_str())) {
+                    else if (PathMatchSpec (input.c_str(), filter_.c_str())) {
 #else
                     else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
 #endif
                         match = true;
                     }
 
-                    if ((match && !invert_) || (!match && invert_)) {
+                    if (match ^ invert_) {
                         LDEBUG << "Matched: " << input;
                         OpenOutputs (sandbox);
                         WriteOutputs (input);
@@ -155,9 +153,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
         CloseInputs();
     }

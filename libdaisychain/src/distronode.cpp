@@ -21,7 +21,7 @@ namespace daisychain {
 using namespace std;
 
 
-DistroNode::DistroNode() : Node()
+DistroNode::DistroNode()
 {
     type_ = DaisyNodeType::DC_DISTRO;
     set_name (DaisyNodeNameByType[type_]);

@@ -57,7 +57,7 @@ private:
     bool passthru_;
 
 #ifdef _WIN32
-    HANDLE handle_;
+    HANDLE handle_{};
 #endif
 };
 } // namespace daisychain

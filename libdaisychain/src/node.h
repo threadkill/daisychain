@@ -83,12 +83,12 @@ class Node
 public:
     Node() :
         id_ (m_gen_uuid()),
-        type_ (DC_INVALID),
         position_ (std::pair<float, float> (0.0f, 0.0f)),
         size_ (std::pair<int, int> (0, 0)),
-        isroot_ (true),
+        type_ (DC_INVALID),
         batch_ (false),
         test_ (false),
+        isroot_ (true),
         eofs_ (0),
         totalbytesread_ (0),
         totalbyteswritten_ (0)
@@ -148,9 +148,9 @@ public:
     {
         thread_ = std::thread ([this, &sandbox, &vars, threadname]() {
             el::Helpers::setThreadName (threadname);
-            this->OpenPipes (sandbox);
+            this->OpenWindowsPipes (sandbox);
             auto stat = this->Execute (sandbox, vars);
-            this->ClosePipes();
+            this->CloseWindowsPipes();
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -161,9 +161,9 @@ public:
     {
         thread_ = std::thread ([this, &inputs, &sandbox, &vars, threadname]() {
             el::Helpers::setThreadName (threadname);
-            this->OpenPipes (sandbox);
+            this->OpenWindowsPipes (sandbox);
             auto stat = this->Execute (inputs, sandbox, vars);
-            this->ClosePipes();
+            this->CloseWindowsPipes();
             LINFO_IF (stat) << "<" << name_ << "> Finished.";
             LERROR_IF (!stat) << "<" << name_ << "> Failed.";
         });
@@ -414,10 +414,10 @@ public:
     } // WriteOutputs
 
 #else
-    void OpenPipes (const string& sandbox_)
+    void OpenWindowsPipes (const string& sandbox_)
     {
         {
-            std::unique_lock<std::mutex> lock (syncMutex);
+            std::unique_lock<std::mutex> lock (sync_mutex_);
 
             for (const auto& fifo : outputs_) {
                 auto pipename = get_pipename (sandbox_, fifo);
@@ -440,8 +440,8 @@ public:
                 fd_out_[fifo] = hwrite;
             }
 
-            nodesReady[id_] = true;
-            syncCV.notify_all();
+            nodes_ready[id_] = true;
+            sync_cv_.notify_all();
         }
 
         for (const auto& fifo : outputs_) {
@@ -460,11 +460,11 @@ public:
             auto pipename = get_pipename (sandbox_, fifo);
 
             {
-                std::unique_lock<std::mutex> lock(syncMutex);
+                std::unique_lock<std::mutex> lock (sync_mutex_);
                 vector<string> tokens;
                 m_split (fifo, ".", tokens);
                 string parentname = tokens[0];
-                syncCV.wait (lock, [&]() { return nodesReady[parentname]; });
+                sync_cv_.wait (lock, [&]() { return nodes_ready[parentname]; });
             }
 
             while (!terminate_.load()) {
@@ -495,11 +495,32 @@ public:
                 }
             }
         }
+
+        {
+            std::unique_lock<std::mutex> lock (close_mutex_);
+            ++nodecount;
+        }
+
     } // OpenPipes
 
 
-    void ClosePipes()
+    void CloseWindowsPipes()
     {
+        {
+            std::unique_lock<std::mutex> lock (close_mutex_);
+            --nodecount;
+            if (nodecount == 0) {
+                close_cv_.notify_all();
+            }
+        }
+
+        {
+            std::unique_lock<std::mutex> lock (close_mutex_);
+            close_cv_.wait (lock, [&]() {
+                return nodecount == 0;
+            });
+        }
+
         for (const auto& fifo : outputs_) {
             auto handle = fd_out_[fifo];
 
@@ -782,9 +803,13 @@ protected:
     map<const string, HANDLE> fd_out_;
     std::thread thread_;
     std::atomic<bool> terminate_;
-    inline static std::mutex syncMutex;
-    inline static std::condition_variable syncCV;
-    inline static std::map<std::string, bool> nodesReady;
+    inline static std::mutex sync_mutex_;
+    inline static std::mutex close_mutex_;
+    inline static std::condition_variable sync_cv_;
+    inline static std::condition_variable close_cv_;
+
+    inline static std::map<std::string, bool> nodes_ready;
+    inline static std::atomic<int> nodecount{0};
     friend class Graph;
 #else
     map<const string, int> fd_in_;
