@@ -35,7 +35,9 @@
 
 #include "logger.h"
 #include "utils.h"
+
 #include <nlohmann/json.hpp>
+#include <set>
 
 
 namespace daisychain {
@@ -416,10 +418,13 @@ public:
 #else
     void OpenWindowsPipes (const string& sandbox_)
     {
+        const std::set uniq_outputs (outputs_.begin(), outputs_.end());
+        const std::set uniq_inputs (inputs_.begin(), inputs_.end());
+
         {
             std::unique_lock<std::mutex> lock (sync_mutex_);
 
-            for (const auto& fifo : outputs_) {
+            for (const auto& fifo : uniq_outputs) {
                 auto pipename = get_pipename (sandbox_, fifo);
 
                 HANDLE hwrite = CreateNamedPipeA(
@@ -444,7 +449,7 @@ public:
             sync_cv_.notify_all();
         }
 
-        for (const auto& fifo : outputs_) {
+        for (const auto& fifo : uniq_outputs) {
             auto pipename = get_pipename (sandbox_, fifo);
             BOOL connected = ConnectNamedPipe (fd_out_[fifo], nullptr);
 
@@ -456,7 +461,7 @@ public:
             }
         }
 
-        for (const auto& fifo : inputs_) {
+        for (const auto& fifo : uniq_inputs) {
             auto pipename = get_pipename (sandbox_, fifo);
 
             {
@@ -521,9 +526,7 @@ public:
             });
         }
 
-        for (const auto& fifo : outputs_) {
-            auto handle = fd_out_[fifo];
-
+        for (const auto& [fifo, handle] : fd_out_) {
             FlushFileBuffers (handle);
             BOOL disconnected = DisconnectNamedPipe (handle);
 
@@ -536,8 +539,7 @@ public:
             }
         }
 
-        for (const auto& fifo : inputs_) {
-            auto handle = fd_in_[fifo];
+        for (const auto& [fifo, handle] : fd_in_) {
             CloseHandle (handle);
         }
 

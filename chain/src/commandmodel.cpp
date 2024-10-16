@@ -54,9 +54,15 @@ CommandModel::embeddedWidget()
         _widget = ChainModel::embeddedWidget();
         _widget->setObjectName ("commandmodel");
 
+#ifdef _WIN32
+        std::string placeholdertext = "Globals are accessible as environment variables."
+                                      "\nBy default, OUTPUT=%INPUT%. This can be changed below. "
+                                      "\nShell variable expansion rules apply.";
+#else
         std::string placeholdertext = "Globals are accessible as environment variables."
                                       "\nBy default, OUTPUT=${INPUT}. This can be changed below. "
                                       "\nShell variable expansion rules apply.";
+#endif
         _textEdit = new QTextEdit ("");
         _textEdit->setParent (_widget);
         _textEdit->setObjectName ("_textEdit");

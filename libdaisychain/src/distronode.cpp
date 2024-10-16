@@ -61,9 +61,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
 
         CloseInputs();
@@ -123,29 +121,40 @@ void
 DistroNode::WriteNextOutput (const string& output)
 {
     string token = output + '\n';
-    DWORD byteswritten = 0;
-    BOOL ret = false;
-    OVERLAPPED overlapped = { 0 };
-    overlapped.hEvent = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+
+    if (output_it_ == outputs_.end()) {
+        output_it_ = outputs_.begin();
+    }
+
     auto handle = fd_out_[*output_it_];
-    DWORD numbytes = 0;
-    auto tokensize = static_cast<DWORD>(token.size());
 
-    do {
-        if (terminate_.load()) return;
-        ret = WriteFile (handle, token.c_str(), tokensize, &numbytes, nullptr);
+    DWORD write = 0;
+    size_t written = 0;
 
-        if (!ret) {
-            LERROR << LOGNODE << "Cannot write to file descriptor: " << *output_it_;
-            continue;
+    while (written < token.size() && !terminate_.load()) {
+        BOOL fSuccess = WriteFile (
+            handle,
+            token.data() + written,
+            static_cast<DWORD> (token.size() - written),
+            &write,
+            nullptr);
+
+        if (!fSuccess) {
+            break;
         }
+        /*
         if (numbytes) {
             token = output.substr (numbytes) + '\n';
         }
+        */
 
-        byteswritten += numbytes;
-        totalbyteswritten_ += numbytes;
-    } while (numbytes < tokensize || (!ret && GetLastError() == ERROR_IO_PENDING));
+        written += write;
+        totalbyteswritten_ += write;
+    }
+
+    output_it_++;
+
+    FlushFileBuffers (handle);
 } // DistroNode::WriteNextOutput
 
 

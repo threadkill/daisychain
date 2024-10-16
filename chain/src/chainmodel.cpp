@@ -89,7 +89,11 @@ ChainModel::embeddedWidget()
 
         _batchChk->setObjectName ("_batchChk");
         _outputEdit->setObjectName ("_outputEdit");
+#ifdef _WIN32
+        _outputEdit->setPlaceholderText ("%INPUT%");
+#else
         _outputEdit->setPlaceholderText ("${INPUT}");
+#endif
 
         _hlayout = new QHBoxLayout();
 
