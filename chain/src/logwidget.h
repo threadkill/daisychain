@@ -58,7 +58,7 @@ private:
     std::unordered_map<QString, LARGE_INTEGER> offsets_;
 #else
     int fd{};
-    std::unordered_map<std::string, int> openfiles_;
+    std::unordered_map<QString, int> openfiles_;
     std::unordered_map<int, off_t > offsets_;
 #endif
 };

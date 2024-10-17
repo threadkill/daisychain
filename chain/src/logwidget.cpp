@@ -17,6 +17,7 @@
 #include <fcntl.h>
 #ifndef _WIN32
 #include <unistd.h>
+#include <cerrno>
 #endif
 
 #include <QGuiApplication>
@@ -139,7 +140,7 @@ void
 LogWidget::setLogFile (const std::string& filename)
 {
     logfile_ = QString::fromStdString (filename);
-    if (!openfiles_.count (filename)) {
+    if (!openfiles_.contains (logfile_)) {
         fd = ::open (filename.c_str(), O_RDONLY);
         if (fd  == -1) {
             LERROR << "Could not open log file for reading: " << filename;
@@ -152,7 +153,7 @@ LogWidget::setLogFile (const std::string& filename)
         fd = openfiles_[logfile_];
     }
 
-    if (offsets_.count (fd)) {
+    if (offsets_.contains (fd)) {
         lseek (fd, offsets_[fd], SEEK_SET);
     }
     else {

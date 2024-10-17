@@ -31,6 +31,7 @@
 #else
 #include <sys/poll.h>
 #include <wordexp.h>
+#include <cerrno>
 #endif
 
 #include "logger.h"
@@ -145,7 +146,7 @@ public:
         return json_;
     }
 
-
+#ifdef _WIN32
     void Start (const string& sandbox, json& vars, const string& threadname)
     {
         thread_ = std::thread ([this, &sandbox, &vars, threadname]() {
@@ -184,7 +185,7 @@ public:
     {
         terminate_.store (true);
     }
-
+#endif
 
     virtual bool Execute (const string& sandbox, json& env)
     {
@@ -797,12 +798,12 @@ protected:
     bool isroot_;
     list<string> inputs_;
     list<string> outputs_;
+    std::atomic<bool> terminate_;
 
 #ifdef _WIN32
     map<const string, HANDLE> fd_in_;
     map<const string, HANDLE> fd_out_;
     std::thread thread_;
-    std::atomic<bool> terminate_;
     inline static std::mutex sync_mutex_;
     inline static std::mutex close_mutex_;
     inline static std::condition_variable sync_cv_;

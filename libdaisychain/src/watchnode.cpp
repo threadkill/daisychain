@@ -16,6 +16,7 @@
 
 #include "watchnode.h"
 #include <filesystem>
+#include <cerrno>
 
 
 namespace daisychain {

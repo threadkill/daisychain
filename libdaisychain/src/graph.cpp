@@ -24,6 +24,7 @@
 #include "utils_win.h"
 #else
 #include <ftw.h>
+#include <cerrno>
 #endif
 
 
@@ -416,12 +417,12 @@ Graph::Test()
 void
 Graph::Terminate()
 {
+#ifdef _WIN32
     for (const auto& [name, node] : nodes_) {
         node->Stop();
     }
 
     running_ = false;
-#ifdef _WIN32
 #else
     if (!process_group_ && !running_)
         return;

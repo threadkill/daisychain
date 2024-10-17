@@ -28,7 +28,9 @@ add_subdirectory (
     ${CMAKE_CURRENT_BINARY_DIR}/nodeeditor
     EXCLUDE_FROM_ALL
 )
+if (WIN32)
 target_compile_options (QtNodes INTERFACE "/W4")
+endif()
 
 # Source
 include_directories (
