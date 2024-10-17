@@ -52,7 +52,6 @@ set (chain_SOURCES
     src/environwidget.cpp
     src/filtermodel.cpp
     src/logwidget.cpp
-    src/lognotifier.cpp
     src/loghighlighter.cpp
     src/graphmodel.cpp
     src/graphmodel.h

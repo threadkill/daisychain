@@ -418,6 +418,8 @@ public:
 #else
     void OpenWindowsPipes (const string& sandbox_)
     {
+        // The GUI will allow duplicate connections on a concat node.
+        // This was the path of least resistance to handle the above case.
         const std::set uniq_outputs (outputs_.begin(), outputs_.end());
         const std::set uniq_inputs (inputs_.begin(), inputs_.end());
 
@@ -576,11 +578,8 @@ public:
                 DWORD error = GetLastError();
                 if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) {
                     LERROR << LOGNODE << "broken pipe.";
-                    break;
                 }
-                else {
-                    break;
-                }
+                break;
             }
 
             if (bytesAvailable == 0) {
@@ -603,9 +602,8 @@ public:
                     cbuffer[dwRead] = '\0';
                     input += cbuffer;
                     totalbytesread_ += dwRead;
+                    LDEBUG << LOGNODE << "read input: " << input;
                 }
-
-                LDEBUG << LOGNODE << "read input: " << input;
             } while (!stat && GetLastError() == ERROR_MORE_DATA);
         }
 

@@ -66,9 +66,7 @@ FileListNode::Execute (vector<string>& inputs, const string& sandbox, json& vars
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
 
         CloseInputs();

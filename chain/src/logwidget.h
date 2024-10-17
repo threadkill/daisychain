@@ -19,8 +19,8 @@
 #include "chainfonts.h"
 #include "chainstyles.h"
 #include "logger.h"
-#include "lognotifier.h"
 #include <QtWidgets/QTextEdit>
+#include <QtCore/QFileSystemWatcher>
 #ifdef _WIN32
 #include <windows.h>
 #endif
@@ -31,11 +31,11 @@ class LogWidget : public QTextEdit
     Q_OBJECT
 
 public:
-    explicit LogWidget (std::string, QWidget* parent = Q_NULLPTR);
+    explicit LogWidget (const std::string&, QWidget* parent = Q_NULLPTR);
     ~LogWidget() override;
 
 public Q_SLOTS:
-    void readLogFile(const std::string&);
+    void readLogFile (const QString&);
 
     static void logLevel (QAction*);
 
@@ -49,14 +49,13 @@ private Q_SLOTS:
     void storeFileOffset();
 
 private:
-    LogNotifier* notifier;
-    std::string logfile;
+    QString logfile_;
     std::map<std::string, QAction*> actions_;
-    QThread* thread_;
+    QFileSystemWatcher* watcher_;
 #ifdef _WIN32
     HANDLE fd{};
-    std::unordered_map<std::string, HANDLE> openfiles_;
-    std::unordered_map<std::string, off_t> offsets_;
+    std::unordered_map<QString, HANDLE> openfiles_;
+    std::unordered_map<QString, LARGE_INTEGER> offsets_;
 #else
     int fd{};
     std::unordered_map<std::string, int> openfiles_;

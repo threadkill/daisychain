@@ -22,7 +22,6 @@
 #include <QGuiApplication>
 #include <QMenu>
 #include <QResizeEvent>
-#include <QThread>
 #include <utility>
 
 #include "logwidget.h"
@@ -30,10 +29,8 @@
 #include "chainstyles.h"
 
 
-LogWidget::LogWidget (std::string filename, QWidget* parent) :
-    QTextEdit (parent),
-    notifier{nullptr},
-    logfile (std::move (filename))
+LogWidget::LogWidget (const std::string& filename, QWidget* parent) :
+    QTextEdit (parent), logfile_ (QString::fromStdString (filename))
 {
     auto highlighter = new LogHighlighter();
     highlighter->setDocument (this->document());
@@ -49,16 +46,9 @@ LogWidget::LogWidget (std::string filename, QWidget* parent) :
     auto font = chain::chainfont();
     font.setPixelSize (11);
     setFont (font);
-    setDocumentTitle (QString::fromStdString (logfile));
+    setDocumentTitle (logfile_);
 
-    notifier = new LogNotifier();
-    thread_ = new QThread();
-
-    connect (thread_, &QThread::started, notifier, &LogNotifier::monitor);
-    connect (notifier, &LogNotifier::fileChanged, this, &LogWidget::readLogFile);
-
-    notifier->moveToThread (thread_);
-    thread_->start();
+    watcher_ = new QFileSystemWatcher (this);
 
     setContextMenuPolicy (Qt::CustomContextMenu);
 
@@ -91,6 +81,7 @@ LogWidget::LogWidget (std::string filename, QWidget* parent) :
     connect (actions_["clear"], &QAction::triggered, this, &LogWidget::storeFileOffset);
     connect (actiongroup, &QActionGroup::triggered, this, &LogWidget::logLevel);
     connect (this, &LogWidget::customContextMenuRequested, this, &LogWidget::showContextMenu);
+    connect (watcher_, &QFileSystemWatcher::fileChanged, this, &LogWidget::readLogFile);
 }
 
 
@@ -103,7 +94,6 @@ LogWidget::~LogWidget()
         ::close (handle);
 #endif
     }
-    thread_->quit();
 }
 
 
@@ -111,13 +101,11 @@ LogWidget::~LogWidget()
 void
 LogWidget::setLogFile (const std::string& filename)
 {
-    logfile = filename;
+    logfile_ = QString::fromStdString (filename);
 
-    // Check if the file is already open
-    if (!openfiles_.count (filename)) {
-        // Try to open the file with read access
+    if (!openfiles_.contains (logfile_)) {
         fd = CreateFileA (
-            logfile.c_str(),
+            filename.c_str(),
             GENERIC_READ,
             FILE_SHARE_WRITE,
             nullptr,
@@ -126,45 +114,42 @@ LogWidget::setLogFile (const std::string& filename)
             nullptr);
 
         if (fd == INVALID_HANDLE_VALUE) {
-            LERROR << "Could not open log file for reading: " + logfile + " " << GetLastError();
+            LERROR << "Could not open log file for reading: " + filename + " " << GetLastError();
             return;
-        } else {
-            // Store the handle for reuse
-            openfiles_[filename] = fd;
-            notifier->setLogFile(logfile);
         }
+        openfiles_[logfile_] = fd;
     } else {
-        fd = openfiles_[filename]; // Reuse existing file handle
+        fd = openfiles_[logfile_];
     }
 
     // If there is an offset for this file, seek to it
-    if (offsets_.count (filename)) {
-        SetFilePointer (fd, offsets_[filename], nullptr, FILE_BEGIN);
+    if (offsets_.contains (logfile_)) {
+        SetFilePointerEx (fd, offsets_[logfile_], nullptr, FILE_BEGIN);
     } else {
-        SetFilePointer (fd, 0, nullptr, FILE_BEGIN); // Seek to the beginning if no offset
+        SetFilePointerEx (fd, {0}, nullptr, FILE_BEGIN);
     }
 
     clear();
-    readLogFile (logfile); // Custom function to read the log file
+    readLogFile (logfile_);
+    watcher_->addPath (logfile_);
 }
 
 #else
 void
 LogWidget::setLogFile (const std::string& filename)
 {
-    logfile = filename;
+    logfile_ = QString::fromStdString (filename);
     if (!openfiles_.count (filename)) {
-        fd = ::open (logfile.c_str(), O_RDONLY);
+        fd = ::open (filename.c_str(), O_RDONLY);
         if (fd  == -1) {
-            LERROR << "Could not open log file for reading: " << logfile;
+            LERROR << "Could not open log file for reading: " << filename;
         }
         else {
-            openfiles_[filename] = fd;
-            notifier->setLogFile (logfile);
+            openfiles_[logfile_] = fd;
         }
     }
     else {
-        fd = openfiles_[filename];
+        fd = openfiles_[logfile_];
     }
 
     if (offsets_.count (fd)) {
@@ -173,36 +158,37 @@ LogWidget::setLogFile (const std::string& filename)
     else {
         lseek (fd, 0, SEEK_SET);
     }
+
     clear();
-    readLogFile (logfile);
+    readLogFile (logfile_);
+    watcher_->addPath (logfile_);
 }
 #endif
 
 
 #ifdef _WIN32
-void LogWidget::readLogFile(const std::string& filename) {
-    if (logfile != filename) {
-        return; // Ensure we are reading the correct log file
-    } else {
-        fd = openfiles_[filename];
+void
+LogWidget::readLogFile (const QString& filename) {
+    if (logfile_ != filename) {
+        return;
     }
 
-    const DWORD BUFFSIZE = 8192; // Buffer size for reading
+    fd = openfiles_[logfile_];
+    constexpr DWORD BUFFSIZE = 8192; // Buffer size for reading
     char cbuffer[BUFFSIZE + 1]; // Extra byte for null terminator
     DWORD numbytes = 0; // Number of bytes read
-    BOOL result;
 
     do {
-        result = ReadFile(fd, cbuffer, BUFFSIZE, &numbytes, nullptr);
+        BOOL result = ReadFile (fd, cbuffer, BUFFSIZE, &numbytes, nullptr);
         if (result && numbytes > 0) {
             cbuffer[numbytes] = '\0';
             moveCursor (QTextCursor::End);
             insertPlainText (QString::fromUtf8 (cbuffer, static_cast<int> (numbytes)));
-            moveCursor (QTextCursor::End); // Move cursor again to the end
+            moveCursor (QTextCursor::End);
         } else if (!result) {
             DWORD error = GetLastError();
             if (error != ERROR_HANDLE_EOF && error != ERROR_IO_PENDING) {
-                LERROR << "Error reading log file: " + filename;
+                LERROR << "Error reading log file: " + filename.toStdString();
                 return;
             }
         }
@@ -212,13 +198,13 @@ void LogWidget::readLogFile(const std::string& filename) {
 #else
 
 void
-LogWidget::readLogFile(const std::string& filename)
+LogWidget::readLogFile(const QString& filename)
 {
-    if (logfile != filename) {
+    if (logfile_ != filename) {
         return;
     }
     else {
-        fd = openfiles_[filename];
+        fd = openfiles_[logfile_];
     }
 
     uint32_t BUFFSIZE = 8192;
@@ -296,7 +282,10 @@ void
 LogWidget::storeFileOffset()
 {
 #ifdef _WIN32
-    SetFilePointer (fd, offsets_[logfile], nullptr, FILE_CURRENT);
+    LARGE_INTEGER currentPosition;
+
+    SetFilePointerEx (fd, {0}, &currentPosition, FILE_CURRENT);
+    offsets_[logfile_] = currentPosition;
 #else
     offsets_[fd] = lseek (fd, 0, SEEK_CUR);
 #endif
