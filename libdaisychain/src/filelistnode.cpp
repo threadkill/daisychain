@@ -72,10 +72,12 @@ FileListNode::Execute (vector<string>& inputs, const string& sandbox, json& vars
         CloseInputs();
     }
 
+    // all processing is done for this node. Send EOF downstream.
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return true;
 } // FileListNode::Execute

@@ -84,6 +84,7 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             OpenOutputs (sandbox);
             WriteOutputs ("EOF");
             CloseOutputs();
+            Reset();
         }
     }
 

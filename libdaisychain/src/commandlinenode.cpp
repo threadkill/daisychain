@@ -121,8 +121,8 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
-
     Stats();
+    Reset();
 
     return stat;
 } // CommandLineNode::Execute

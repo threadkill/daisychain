@@ -301,7 +301,6 @@ public:
 
             if (stat == -1) {
                 LERROR << LOGNODE << "Cannot close output file descriptor: " << fd.first;
-                continue;
             }
         }
 #endif
@@ -548,9 +547,7 @@ public:
 
         fd_in_.clear();
         fd_out_.clear();
-        eofs_ = 0;
-        totalbytesread_ = 0;
-        totalbyteswritten_ = 0;
+        Reset();
     } // ClosePipes
 
 
@@ -655,6 +652,18 @@ public:
         CloseOutputs();
         CloseInputs();
     } // Cleanup
+
+
+    virtual void Reset()
+    {
+#ifndef _WIN32
+        fd_in_.clear();
+        fd_out_.clear();
+#endif
+        eofs_ = 0;
+        totalbytesread_ = 0;
+        totalbyteswritten_ = 0;
+    }
 
 
     DaisyNodeType type() { return type_; }

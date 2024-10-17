@@ -163,6 +163,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return true;
 } // FilterNode::Execute

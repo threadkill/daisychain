@@ -71,6 +71,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return true;
 } // DistroNode::Execute
@@ -111,7 +112,7 @@ DistroNode::CloseNextOutput()
         LERROR << LOGNODE << "Cannot close output file descriptor: " << *output_it_;
     }
 
-    output_it_++;
+    ++output_it_;
 #endif
 } // DistroNode::CloseNextOutput
 
