@@ -16,7 +16,9 @@
 
 #pragma once
 
+#include <queue>
 #include "node.h"
+#include "utils.h"
 
 
 namespace daisychain {
@@ -31,9 +33,26 @@ public:
 
     bool Execute (vector<string>& input, const string& sandbox, json& vars) override;
 
+    void Stop() override;
+
     json Serialize() override;
 
     void Cleanup() override;
+
+    virtual void Reset()
+    {
+#ifndef _WIN32
+        fd_in_.clear();
+        fd_out_.clear();
+#endif
+        eofs_ = 0;
+        totalbytesread_ = 0;
+        totalbyteswritten_ = 0;
+        stopwatching_ = false;
+        watch_handle_map_.clear();  // only directories can be watched on windows
+        watch_files_.clear();     // explicitly watched files
+        //modified_files_;
+    }
 
     bool passthru() const { return passthru_; }
 
@@ -57,7 +76,33 @@ private:
     bool passthru_;
 
 #ifdef _WIN32
-    HANDLE handle_{};
+    DWORD WINAPI MonitorThread();
+
+    #define BUFFER_SIZE (1024 * 64)
+    struct DirectoryInfo {
+        std::string directoryPath;
+        HANDLE hDir;
+        OVERLAPPED overlapped;
+        BYTE buffer[BUFFER_SIZE];
+    };
+
+    static DWORD WINAPI ThreadProc (LPVOID lpParameter) {
+        auto* worker = static_cast<WatchNode*>(lpParameter);
+        worker->MonitorThread();
+        return 0;
+    }
+
+    HANDLE iocp_{};                         // IO Completion Port HANDLE
+    map<string, HANDLE> watch_handle_map_;  // only directories can be watched on windows
+    std::vector<fs::path> watch_files_;     // explicitly watched files
+    std::mutex modified_mutex_;
+    std::mutex terminate_mutex_;
+    std::condition_variable modified_cv_;
+    std::condition_variable terminate_cv_;
+    std::queue<string> modified_files_;
+    std::vector<DirectoryInfo*> dirinfos_;
+    bool stopwatching_;
+
 #endif
 };
 } // namespace daisychain

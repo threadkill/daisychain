@@ -181,7 +181,7 @@ public:
     }
 
 
-    void Stop()
+    virtual void Stop()
     {
         terminate_.store (true);
     }
@@ -665,7 +665,6 @@ public:
         totalbyteswritten_ = 0;
     }
 
-
     DaisyNodeType type() { return type_; }
 
     void set_id() { id_ = m_gen_uuid(); }
@@ -807,7 +806,7 @@ protected:
     bool isroot_;
     list<string> inputs_;
     list<string> outputs_;
-    std::atomic<bool> terminate_;
+    atomic<bool> terminate_;
 
 #ifdef _WIN32
     map<const string, HANDLE> fd_in_;
@@ -817,7 +816,6 @@ protected:
     inline static std::mutex close_mutex_;
     inline static std::condition_variable sync_cv_;
     inline static std::condition_variable close_cv_;
-
     inline static std::map<std::string, bool> nodes_ready;
     inline static std::atomic<int> nodecount{0};
     friend class Graph;

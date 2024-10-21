@@ -22,6 +22,7 @@
 #include <sstream>
 #include <iterator>
 #include <algorithm>
+#include <filesystem>
 #include <random>
 #include "utils_win.h"
 #ifndef _WIN32
@@ -30,8 +31,9 @@
 
 
 #include <nlohmann/json.hpp>
-
 using json = nlohmann::ordered_json;
+
+namespace fs = std::filesystem;
 
 
 inline void
@@ -74,7 +76,7 @@ m_split (const std::string& s, const std::string& delims, std::vector<std::strin
 
 
 template <typename C>
-inline std::string
+std::string
 m_join (const C& container, const std::string& delimiter)
 {
     std::ostringstream result;
@@ -95,7 +97,7 @@ m_join (const C& container, const std::string& delimiter)
 
 
 template <typename C, typename F>
-inline std::string
+std::string
 m_join_if (C& container, const std::string& separator, F comp)
 {
     std::ostringstream oss;
@@ -236,8 +238,8 @@ m_get_thread_name()
 inline void
 m_set_thread_name (const std::string& name)
 {
-    HRESULT hr = SetThreadDescription(GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str());
-    if (FAILED(hr)) {
+    HRESULT hr = SetThreadDescription (GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str());
+    if (FAILED (hr)) {
         std::cerr << "Failed to set thread description" << std::endl;
     }
 }
@@ -285,3 +287,61 @@ m_debug_wait (bool dowait = false)
 } // m_debug_wait
 
 
+
+// Function to get the common root folder between two file paths
+inline fs::path
+m_common_root (const fs::path &path1, const fs::path &path2) {
+    auto it1 = path1.begin();
+    auto it2 = path2.begin();
+
+    fs::path common;
+
+    while (it1 != path1.end() && it2 != path2.end() && *it1 == *it2) {
+        common /= *it1;
+        ++it1;
+        ++it2;
+    }
+
+    return common;
+}
+
+
+// Function to find the minimum set of root folders that cover all paths
+inline std::vector<fs::path>
+m_minimum_root (const std::vector<fs::path> &paths) {
+    if (paths.empty()) return {};
+
+    if (paths.size() == 1) {
+        if (fs::is_directory (paths[0])) {
+            return {paths[0]};
+        }
+        return {paths[0].parent_path()};
+    }
+
+    std::vector<fs::path> rootFolders;
+    std::vector<bool> used (paths.size(), false);
+
+    // Loop through all paths to group them by common roots
+    for (size_t i = 0; i < paths.size(); ++i) {
+        if (used[i]) continue;  // Skip if already part of a group
+
+        fs::path commonRootFolder = paths[i];
+        used[i] = true;
+
+        // Compare with other paths and group them based on common root
+        for (size_t j = i + 1; j < paths.size(); ++j) {
+            if (!used[j]) {
+                fs::path newCommonRoot = m_common_root (commonRootFolder, paths[j]);
+                if (!newCommonRoot.empty()) {
+                    commonRootFolder = newCommonRoot;
+                    used[j] = true;  // Mark path as processed
+                }
+            }
+        }
+
+        // Add the found common root folder to the result set
+        rootFolders.push_back (commonRootFolder);
+    }
+
+    return rootFolders;
+}

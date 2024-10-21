@@ -78,7 +78,7 @@ LogFilter::dispatch (el::base::type::string_t&& logline) noexcept
             std::cerr << "Error: Unable to write to the file." << std::endl;
         }
 
-        //FlushFileBuffers (fd);
+        FlushFileBuffers (fd);
     }
 }
 

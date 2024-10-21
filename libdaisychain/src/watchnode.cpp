@@ -25,7 +25,8 @@ using namespace filesystem;
 
 
 WatchNode::WatchNode() :
-    passthru_ (false)
+    passthru_ (false),
+    stopwatching_ (false)
 {
     type_ = DaisyNodeType::DC_WATCH;
     batch_ = true;
@@ -51,6 +52,7 @@ WatchNode::Initialize (json& keydata, bool keep_uuid)
 } // WatchNode::Initialize
 
 
+#ifndef _WIN32
 bool
 WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 {
@@ -78,18 +80,17 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 
             Monitor (sandbox);
         }
-        else {
-            RemoveWatches();
 
-            OpenOutputs (sandbox);
-            WriteOutputs ("EOF");
-            CloseOutputs();
-            Reset();
-        }
+        RemoveWatches();
+        OpenOutputs (sandbox);
+        WriteOutputs ("EOF");
+        CloseOutputs();
+        Reset();
     }
 
     return stat;
 } // WatchNode::Execute
+#endif
 
 
 json
@@ -488,11 +489,77 @@ WatchNode::RemoveMonitor() const
 
 #ifdef _WIN32
 bool
+WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
+{
+    bool stat = true;
+
+    LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << name_;
+
+    if (!InitNotify()) {
+        return false;
+    }
+
+    std::vector<path> allpaths (inputs.begin(), inputs.end());
+    for (const auto& path: allpaths) {
+        if (is_regular_file (path)) {
+            watch_files_.emplace_back (path.string());
+            if (passthru_) {
+                OpenOutputs (sandbox);
+                WriteOutputs (path.string());
+                CloseOutputs();
+            }
+        }
+    }
+
+    auto common_folders = m_minimum_root (allpaths);
+    for (auto& folder: common_folders) {
+        if (!Notify (sandbox, folder.string())) {
+            stat = false;
+        }
+    }
+
+    if (stat) {
+        if (!test_) {
+            if (!inputs.empty() && inputs[inputs.size() - 1] == "EOF") {
+                inputs.pop_back();
+            }
+
+            Monitor (sandbox);
+        }
+
+        RemoveWatches();
+        OpenOutputs (sandbox);
+        WriteOutputs ("EOF");
+        CloseOutputs();
+        Reset();
+    }
+
+    return stat;
+} // WatchNode::Execute
+
+
+void
+WatchNode::Stop()
+{
+    {
+        std::lock_guard<std::mutex> lock (terminate_mutex_);
+        stopwatching_ = true;
+    }
+    terminate_cv_.notify_all();
+    terminate_.store (true);
+    modified_cv_.notify_all();
+}
+
+
+bool
 WatchNode::InitNotify()
 {
     bool stat = true;
 
-    handle_ = nullptr;
+    iocp_ = CreateIoCompletionPort (INVALID_HANDLE_VALUE, nullptr, 0, 0);
+    if (iocp_ == nullptr) {
+        stat = false;
+    }
 
     return stat;
 } // WatchNode::InitNotify
@@ -503,118 +570,231 @@ WatchNode::Notify (const string& sandbox, const string& path)
 {
     bool stat = true;
 
-    std::vector<string> paths;
-    paths.push_back (path);
+    auto* pDirInfo = new DirectoryInfo();
+    pDirInfo->directoryPath = path;
 
-    auto fs_path = filesystem::path (path);
-    if (!is_directory (fs_path)) {
+    pDirInfo->hDir = CreateFile(
+        path.c_str(),
+        FILE_LIST_DIRECTORY,
+        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+        nullptr
+    );
+
+    if (pDirInfo->hDir == INVALID_HANDLE_VALUE) {
+        LDEBUG << "Watch failed on: " << path;
+        delete pDirInfo;
         return false;
     }
 
-    for (const auto& input : paths) {
-        handle_ = CreateFile(
-            input.c_str(),
-            FILE_LIST_DIRECTORY,
-            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-            nullptr,
-            OPEN_EXISTING,
-            FILE_FLAG_BACKUP_SEMANTICS,
-            nullptr
-        );
-
-        if (handle_ == INVALID_HANDLE_VALUE) {
-            LDEBUG << "Watch failed on: " << input;
-            stat = false;
-        }
-        else if (passthru_ && is_regular_file (filesystem::path (input))) {
-            OpenOutputs (sandbox);
-            WriteOutputs (input);
-            CloseOutputs();
-        }
+    auto ioh = CreateIoCompletionPort (pDirInfo->hDir, iocp_, reinterpret_cast<ULONG_PTR> (pDirInfo), 0);
+    if (ioh == nullptr) {
+        CloseHandle (pDirInfo->hDir);
+        delete pDirInfo;
+        return false;
     }
+
+    ZeroMemory (&pDirInfo->overlapped, sizeof(OVERLAPPED));
+
+    BOOL success = ReadDirectoryChangesW(
+        pDirInfo->hDir,
+        pDirInfo->buffer,
+        BUFFER_SIZE,
+        TRUE, // Monitor subdirectories
+        FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+        FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
+        FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY,
+        nullptr,
+        &pDirInfo->overlapped,
+        nullptr);
+
+    if (!success) {
+        CloseHandle (pDirInfo->hDir);
+        delete pDirInfo;
+        return false;
+    }
+
+    watch_handle_map_[path] = pDirInfo->hDir;
+    dirinfos_.push_back (pDirInfo);
 
     return stat;
 } // WatchNode::Notify
 
 
-void
-WatchNode::Monitor (const string& sandbox)
+DWORD WINAPI
+WatchNode::MonitorThread()
 {
-    DWORD dwBytesReturned;
-    char buffer[1024];
-    FILE_NOTIFY_INFORMATION *pNotify;
+    DWORD bytesTransferred;
+    ULONG_PTR completionKey;
+    LPOVERLAPPED lpOverlapped;
 
     while (!terminate_.load()) {
-        if (!handle_) {
-            std::this_thread::sleep_for (std::chrono::milliseconds(200));
+        BOOL success = GetQueuedCompletionStatus(
+            iocp_,
+            &bytesTransferred,
+            &completionKey,
+            &lpOverlapped,
+            INFINITE);
+
+        if (lpOverlapped == nullptr && completionKey == 0) {
+            LERROR << "lpOverlapped is nullptr.";
+            break;
+        }
+
+        if (!success) {
+            DWORD error = GetLastError();
+            LERROR << "GetQueuedCompletionStatus failed with error: " << error;
             continue;
         }
-        if (ReadDirectoryChangesW(
-                handle_,
-                buffer,
-                sizeof(buffer),
-                TRUE, // TRUE to monitor subdirectories as well
-                FILE_NOTIFY_CHANGE_FILE_NAME |
-                FILE_NOTIFY_CHANGE_DIR_NAME |
-                FILE_NOTIFY_CHANGE_ATTRIBUTES |
-                FILE_NOTIFY_CHANGE_SIZE |
-                FILE_NOTIFY_CHANGE_LAST_WRITE |
-                FILE_NOTIFY_CHANGE_CREATION,
-                &dwBytesReturned,
-                nullptr,
-                nullptr))
-        {
-            int offset = 0;
-            bool transmit = false;
 
-            do {
-                pNotify = reinterpret_cast<FILE_NOTIFY_INFORMATION*> (&buffer[offset]);
+        auto* pDirInfo = reinterpret_cast<DirectoryInfo*>(completionKey);
 
-                switch (pNotify->Action) {
-                    case FILE_ACTION_ADDED:
-                        LDEBUG << "File added: ";
-                        transmit = true;
-                        break;
-                    case FILE_ACTION_REMOVED:
-                        LDEBUG << "File removed: ";
-                        break;
-                    case FILE_ACTION_MODIFIED:
-                        LDEBUG << "File modified: ";
-                        transmit = true;
-                        break;
-                    case FILE_ACTION_RENAMED_OLD_NAME:
-                        LDEBUG << "File renamed (old name): ";
-                        break;
-                    case FILE_ACTION_RENAMED_NEW_NAME:
-                        LDEBUG << "File renamed (new name): ";
-                        transmit = true;
-                        break;
-                    default:
-                        LDEBUG << "Unknown action: ";
-                        break;
-                }
-
-                auto filename = wchar2string (pNotify->FileName);
-                LDEBUG << filename;
-
-                if (transmit) {
-                    OpenOutputs (sandbox);
-                    if (terminate_.load()) {
-                        WriteOutputs ("EOF");
-                    }
-                    else {
-                        WriteOutputs (filename);
-                    }
-                    CloseOutputs();
-                }
-
-                offset += pNotify->NextEntryOffset;
-            } while (pNotify->NextEntryOffset != 0 && !terminate_.load());
+        if (pDirInfo == nullptr) {
+            LERROR << "pDirInfo is nullptr.";
+            continue;
         }
-        else {
+
+        if (bytesTransferred == 0) {
+            continue;
+        }
+
+        ZeroMemory (&pDirInfo->overlapped, sizeof(OVERLAPPED));
+
+        success = ReadDirectoryChangesW(
+            pDirInfo->hDir,
+            pDirInfo->buffer,
+            BUFFER_SIZE,
+            TRUE,
+            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+            FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
+            FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY,
+            nullptr,
+            &pDirInfo->overlapped,
+            nullptr);
+
+        if (!success) {
             LERROR << "ReadDirectoryChangesW failed with error: " << GetLastError();
             break;
         }
+
+        FILE_NOTIFY_INFORMATION* pNotify;
+        size_t offset = 0;
+
+        do {
+            pNotify = (FILE_NOTIFY_INFORMATION*) ((BYTE*) pDirInfo->buffer + offset);
+            bool transmit = false;
+
+            switch (pNotify->Action) {
+                case FILE_ACTION_ADDED:
+                    LDEBUG << "File added: ";
+                    transmit = true;
+                    break;
+                case FILE_ACTION_REMOVED:
+                    LDEBUG << "File removed: ";
+                    break;
+                case FILE_ACTION_MODIFIED:
+                    LDEBUG << "File modified: ";
+                    transmit = true;
+                    break;
+                case FILE_ACTION_RENAMED_OLD_NAME:
+                    LDEBUG << "File renamed (old name): ";
+                    break;
+                case FILE_ACTION_RENAMED_NEW_NAME:
+                    LDEBUG << "File renamed (new name): ";
+                    transmit = true;
+                    break;
+                default:
+                    LDEBUG << "Unknown action: ";
+                    break;
+            }
+
+            if (transmit) {
+                std::wstring wfilename (pNotify->FileName, pNotify->FileNameLength / sizeof (WCHAR));
+                string filename (wfilename.begin(), wfilename.end());
+                std::lock_guard<std::mutex> lock (modified_mutex_);
+                modified_files_.push (filename);
+            }
+
+            modified_cv_.notify_one();
+            offset += pNotify->NextEntryOffset;
+        } while (pNotify->NextEntryOffset != 0);
+    }
+
+    return 0;
+}
+
+
+void
+WatchNode::Monitor (const string& sandbox)
+{
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+    int numThreads = sysInfo.dwNumberOfProcessors * 2;
+    numThreads = 4;
+
+    std::vector<HANDLE> threadHandles;
+
+    for (int i = 0; i < numThreads; ++i) {
+        HANDLE hThread = CreateThread(
+            nullptr,
+            0,
+            &WatchNode::ThreadProc,
+            this,
+            0,
+            nullptr);
+
+        if (hThread == nullptr) {
+            std::cerr << "Failed to create worker thread." << std::endl;
+            continue;
+        }
+
+        threadHandles.push_back (hThread);
+    }
+
+    /*
+    {
+        std::unique_lock<std::mutex> lock (terminate_mutex_);
+        terminate_cv_.wait (lock, [this]() { return stopwatching_; });
+    }
+    */
+
+    while (!stopwatching_) {
+        std::unique_lock<std::mutex> lock (modified_mutex_);
+
+        modified_cv_.wait (lock, [this] {
+            return !modified_files_.empty() || stopwatching_;
+        });
+
+        if (stopwatching_) {break;}
+
+        if (!modified_files_.empty()) {
+            auto filename = modified_files_.front();
+            modified_files_.pop();
+
+            lock.unlock();
+            WriteOutputs (filename);
+            lock.lock();
+        }
+    }
+
+    for (int i = 0; i < numThreads; ++i) {
+        PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
+    }
+
+    WaitForMultipleObjects(
+        static_cast<DWORD> (threadHandles.size()), threadHandles.data(), TRUE, INFINITE);
+
+    for (HANDLE hThread : threadHandles) {
+        CloseHandle (hThread);
+    }
+
+    CloseHandle (iocp_);
+
+    for (auto pDirInfo : dirinfos_) {
+        CloseHandle (pDirInfo->hDir);
+        delete pDirInfo;
     }
 }
 
@@ -622,8 +802,11 @@ WatchNode::Monitor (const string& sandbox)
 void
 WatchNode::RemoveWatches()
 {
-    CloseHandle (handle_);
-    handle_ = nullptr;
+    if (iocp_ != nullptr) {
+        //CloseHandle (iocp_);
+        iocp_ = nullptr;
+    }
+
     LDEBUG << "Removed watched file descriptors.";
 } // WatchNode::RemoveWatches
 
