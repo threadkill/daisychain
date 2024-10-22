@@ -663,6 +663,7 @@ public:
         eofs_ = 0;
         totalbytesread_ = 0;
         totalbyteswritten_ = 0;
+        terminate_.store (false);
     }
 
     DaisyNodeType type() { return type_; }

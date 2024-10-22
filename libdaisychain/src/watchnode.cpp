@@ -626,100 +626,125 @@ WatchNode::Notify (const string& sandbox, const string& path)
 DWORD WINAPI
 WatchNode::MonitorThread()
 {
-    DWORD bytesTransferred;
-    ULONG_PTR completionKey;
-    LPOVERLAPPED lpOverlapped;
+    ULONG numEntriesRemoved = 0;
 
     while (!terminate_.load()) {
-        BOOL success = GetQueuedCompletionStatus(
+        OVERLAPPED_ENTRY overlappedEntries[MAXIMUM_WAIT_OBJECTS];
+        BOOL success = GetQueuedCompletionStatusEx(
             iocp_,
-            &bytesTransferred,
-            &completionKey,
-            &lpOverlapped,
-            INFINITE);
+            overlappedEntries,
+            MAXIMUM_WAIT_OBJECTS,
+            &numEntriesRemoved,
+            500,
+            FALSE);
 
-        if (lpOverlapped == nullptr && completionKey == 0) {
-            LERROR << "lpOverlapped is nullptr.";
-            break;
-        }
+        if (terminate_.load()) break;
 
         if (!success) {
             DWORD error = GetLastError();
-            LERROR << "GetQueuedCompletionStatus failed with error: " << error;
+            if (error == WAIT_TIMEOUT) {
+                continue; // Timeout reached, check for termination
+            }
+            LERROR << "GetQueuedCompletionStatusEx failed with error: " << error;
             continue;
         }
 
-        auto* pDirInfo = reinterpret_cast<DirectoryInfo*>(completionKey);
+        std::vector<std::string> batch_modified_files;
 
-        if (pDirInfo == nullptr) {
-            LERROR << "pDirInfo is nullptr.";
-            continue;
-        }
+        for (ULONG i = 0; i < numEntriesRemoved; ++i) {
+            LPOVERLAPPED lpOverlapped = overlappedEntries[i].lpOverlapped;
+            ULONG_PTR completionKey = overlappedEntries[i].lpCompletionKey;
+            DWORD bytesTransferred = overlappedEntries[i].dwNumberOfBytesTransferred;
 
-        if (bytesTransferred == 0) {
-            continue;
-        }
-
-        ZeroMemory (&pDirInfo->overlapped, sizeof(OVERLAPPED));
-
-        success = ReadDirectoryChangesW(
-            pDirInfo->hDir,
-            pDirInfo->buffer,
-            BUFFER_SIZE,
-            TRUE,
-            FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-            FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
-            FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY,
-            nullptr,
-            &pDirInfo->overlapped,
-            nullptr);
-
-        if (!success) {
-            LERROR << "ReadDirectoryChangesW failed with error: " << GetLastError();
-            break;
-        }
-
-        FILE_NOTIFY_INFORMATION* pNotify;
-        size_t offset = 0;
-
-        do {
-            pNotify = (FILE_NOTIFY_INFORMATION*) ((BYTE*) pDirInfo->buffer + offset);
-            bool transmit = false;
-
-            switch (pNotify->Action) {
-                case FILE_ACTION_ADDED:
-                    LDEBUG << "File added: ";
-                    transmit = true;
-                    break;
-                case FILE_ACTION_REMOVED:
-                    LDEBUG << "File removed: ";
-                    break;
-                case FILE_ACTION_MODIFIED:
-                    LDEBUG << "File modified: ";
-                    transmit = true;
-                    break;
-                case FILE_ACTION_RENAMED_OLD_NAME:
-                    LDEBUG << "File renamed (old name): ";
-                    break;
-                case FILE_ACTION_RENAMED_NEW_NAME:
-                    LDEBUG << "File renamed (new name): ";
-                    transmit = true;
-                    break;
-                default:
-                    LDEBUG << "Unknown action: ";
-                    break;
+            if (lpOverlapped == nullptr && completionKey == 0) {
+                LERROR << "lpOverlapped is nullptr.";
+                break;
             }
 
-            if (transmit) {
-                std::wstring wfilename (pNotify->FileName, pNotify->FileNameLength / sizeof (WCHAR));
-                string filename (wfilename.begin(), wfilename.end());
-                std::lock_guard<std::mutex> lock (modified_mutex_);
+            auto* pDirInfo = reinterpret_cast<DirectoryInfo*>(completionKey);
+            if (pDirInfo == nullptr) {
+                LERROR << "pDirInfo is nullptr.";
+                continue;
+            }
+
+            if (bytesTransferred == 0) {
+                continue;
+            }
+
+            ZeroMemory(&pDirInfo->overlapped, sizeof(OVERLAPPED));
+
+            success = ReadDirectoryChangesW(
+                pDirInfo->hDir,
+                pDirInfo->buffer,
+                BUFFER_SIZE,
+                TRUE,
+                FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
+                FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
+                FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY,
+                nullptr,
+                &pDirInfo->overlapped,
+                nullptr);
+
+            if (!success) {
+                LERROR << "ReadDirectoryChangesW failed with error: " << GetLastError();
+                break;
+            }
+
+            FILE_NOTIFY_INFORMATION* pNotify;
+            size_t offset = 0;
+
+            do {
+                pNotify = (FILE_NOTIFY_INFORMATION*)((BYTE*)pDirInfo->buffer + offset);
+                bool transmit = false;
+
+                switch (pNotify->Action) {
+                    case FILE_ACTION_ADDED:
+                        LDEBUG << "File added: ";
+                        transmit = true;
+                        break;
+                    case FILE_ACTION_REMOVED:
+                        LDEBUG << "File removed: ";
+                        break;
+                    case FILE_ACTION_MODIFIED:
+                        LDEBUG << "File modified: ";
+                        transmit = true;
+                        break;
+                    case FILE_ACTION_RENAMED_OLD_NAME:
+                        LDEBUG << "File renamed (old name): ";
+                        break;
+                    case FILE_ACTION_RENAMED_NEW_NAME:
+                        LDEBUG << "File renamed (new name): ";
+                        transmit = true;
+                        break;
+                    default:
+                        LDEBUG << "Unknown action: ";
+                        break;
+                }
+
+                if (transmit) {
+                    std::wstring wfilename(pNotify->FileName, pNotify->FileNameLength / sizeof(WCHAR));
+                    std::string filename(wfilename.begin(), wfilename.end());
+
+                    // Time-based filtering of duplicates
+                    auto now = std::chrono::steady_clock::now();
+                    auto it = notifications_.find (filename);
+                    if (it == notifications_.end() || (now - it->second) >= debounce_time) {
+                        notifications_[filename] = now;
+                        batch_modified_files.push_back (filename);
+                    }
+                }
+
+                offset += pNotify->NextEntryOffset;
+            } while (pNotify->NextEntryOffset != 0);
+        }
+
+        if (!batch_modified_files.empty()) {
+            std::lock_guard lock (modified_mutex_);
+            for (const auto& filename : batch_modified_files) {
                 modified_files_.push (filename);
             }
-
             modified_cv_.notify_one();
-            offset += pNotify->NextEntryOffset;
-        } while (pNotify->NextEntryOffset != 0);
+        }
     }
 
     return 0;
@@ -731,8 +756,7 @@ WatchNode::Monitor (const string& sandbox)
 {
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
-    int numThreads = sysInfo.dwNumberOfProcessors * 2;
-    numThreads = 4;
+    int numThreads = sysInfo.dwNumberOfProcessors;
 
     std::vector<HANDLE> threadHandles;
 
@@ -753,15 +777,8 @@ WatchNode::Monitor (const string& sandbox)
         threadHandles.push_back (hThread);
     }
 
-    /*
-    {
-        std::unique_lock<std::mutex> lock (terminate_mutex_);
-        terminate_cv_.wait (lock, [this]() { return stopwatching_; });
-    }
-    */
-
     while (!stopwatching_) {
-        std::unique_lock<std::mutex> lock (modified_mutex_);
+        std::unique_lock lock (modified_mutex_);
 
         modified_cv_.wait (lock, [this] {
             return !modified_files_.empty() || stopwatching_;
