@@ -39,7 +39,7 @@ public:
 
     void Cleanup() override;
 
-    virtual void Reset()
+    void Reset() override
     {
 #ifndef _WIN32
         fd_in_.clear();
@@ -50,13 +50,17 @@ public:
         totalbyteswritten_ = 0;
         stopwatching_ = false;
         watch_handle_map_.clear();  // only directories can be watched on windows
-        watch_files_.clear();     // explicitly watched files
+        watch_files_.clear();       // explicitly watched files
         //modified_files_;
     }
 
     bool passthru() const { return passthru_; }
 
     void set_passthru (bool passthru) { passthru_ = passthru; }
+
+    bool recursive() const { return recursive_; }
+
+    void set_recursive (bool recursive) { recursive_ = recursive; }
 
 private:
     bool InitNotify();
@@ -74,6 +78,8 @@ private:
     int notify_fd_ = 0;
 
     bool passthru_;
+
+    bool recursive_;
 
 #ifdef _WIN32
     DWORD WINAPI MonitorThread();

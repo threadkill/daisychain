@@ -73,10 +73,10 @@ ChainScene::updateGraphicsObject (const NodeId qtnode)
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
             "Watch:\n"
             " - Watches all file inputs for changes.\n"
-            " - Recursively watches directories.\n"
-            " - Writes changed input name to output.\n"
-            " - Execution continues until program exit.\n"
-            " - 'Passthru' processes all inputs before enabling watch.");
+            " - Recursively watches directories for file changes.\n"
+            " - Writes changed files to output.\n"
+            " - 'Passthru' processes all inputs before enabling watch.\n"
+            " - Execution continues until program exit.");
     }
 
     reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setSelected (true);

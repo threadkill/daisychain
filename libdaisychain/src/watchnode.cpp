@@ -26,6 +26,7 @@ using namespace filesystem;
 
 WatchNode::WatchNode() :
     passthru_ (false),
+    recursive_ (true),
     stopwatching_ (false)
 {
     type_ = DaisyNodeType::DC_WATCH;
@@ -48,6 +49,10 @@ WatchNode::Initialize (json& keydata, bool keep_uuid)
 
     if (data.count ("passthru")) {
         set_passthru (data["passthru"]);
+    }
+
+    if (data.count ("recursive")) {
+        set_passthru (data["recursive"]);
     }
 } // WatchNode::Initialize
 
@@ -98,6 +103,7 @@ WatchNode::Serialize()
 {
     auto json = Node::Serialize();
     json[id_]["passthru"] = passthru_;
+    json[id_]["recursive"] = recursive_;
 
     return json;
 } // WatchNode::Serialize
@@ -548,7 +554,7 @@ WatchNode::Stop()
     terminate_cv_.notify_all();
     terminate_.store (true);
     modified_cv_.notify_all();
-}
+} // WatchNode::Stop
 
 
 bool
@@ -570,10 +576,10 @@ WatchNode::Notify (const string& sandbox, const string& path)
 {
     bool stat = true;
 
-    auto* pDirInfo = new DirectoryInfo();
-    pDirInfo->directoryPath = path;
+    auto* dirinfo = new DirectoryInfo();
+    dirinfo->directoryPath = path;
 
-    pDirInfo->hDir = CreateFile(
+    dirinfo->hDir = CreateFile(
         path.c_str(),
         FILE_LIST_DIRECTORY,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
@@ -583,41 +589,40 @@ WatchNode::Notify (const string& sandbox, const string& path)
         nullptr
     );
 
-    if (pDirInfo->hDir == INVALID_HANDLE_VALUE) {
+    if (dirinfo->hDir == INVALID_HANDLE_VALUE) {
         LDEBUG << "Watch failed on: " << path;
-        delete pDirInfo;
+        delete dirinfo;
         return false;
     }
 
-    auto ioh = CreateIoCompletionPort (pDirInfo->hDir, iocp_, reinterpret_cast<ULONG_PTR> (pDirInfo), 0);
+    auto ioh = CreateIoCompletionPort (dirinfo->hDir, iocp_, reinterpret_cast<ULONG_PTR> (dirinfo), 0);
     if (ioh == nullptr) {
-        CloseHandle (pDirInfo->hDir);
-        delete pDirInfo;
+        CloseHandle (dirinfo->hDir);
+        delete dirinfo;
         return false;
     }
 
-    ZeroMemory (&pDirInfo->overlapped, sizeof(OVERLAPPED));
+    ZeroMemory (&dirinfo->overlapped, sizeof(OVERLAPPED));
 
     BOOL success = ReadDirectoryChangesW(
-        pDirInfo->hDir,
-        pDirInfo->buffer,
+        dirinfo->hDir,
+        dirinfo->buffer,
         BUFFER_SIZE,
         TRUE, // Monitor subdirectories
         FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-        FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
-        FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY,
+        FILE_NOTIFY_CHANGE_SIZE      | FILE_NOTIFY_CHANGE_LAST_WRITE,
         nullptr,
-        &pDirInfo->overlapped,
+        &dirinfo->overlapped,
         nullptr);
 
     if (!success) {
-        CloseHandle (pDirInfo->hDir);
-        delete pDirInfo;
+        CloseHandle (dirinfo->hDir);
+        delete dirinfo;
         return false;
     }
 
-    watch_handle_map_[path] = pDirInfo->hDir;
-    dirinfos_.push_back (pDirInfo);
+    watch_handle_map_[path] = dirinfo->hDir;
+    dirinfos_.push_back (dirinfo);
 
     return stat;
 } // WatchNode::Notify
@@ -626,15 +631,15 @@ WatchNode::Notify (const string& sandbox, const string& path)
 DWORD WINAPI
 WatchNode::MonitorThread()
 {
-    ULONG numEntriesRemoved = 0;
+    ULONG num_removed = 0;
 
     while (!terminate_.load()) {
-        OVERLAPPED_ENTRY overlappedEntries[MAXIMUM_WAIT_OBJECTS];
+        OVERLAPPED_ENTRY overlapped[MAXIMUM_WAIT_OBJECTS];
         BOOL success = GetQueuedCompletionStatusEx(
             iocp_,
-            overlappedEntries,
+            overlapped,
             MAXIMUM_WAIT_OBJECTS,
-            &numEntriesRemoved,
+            &num_removed,
             500,
             FALSE);
 
@@ -651,38 +656,37 @@ WatchNode::MonitorThread()
 
         std::vector<std::string> batch_modified_files;
 
-        for (ULONG i = 0; i < numEntriesRemoved; ++i) {
-            LPOVERLAPPED lpOverlapped = overlappedEntries[i].lpOverlapped;
-            ULONG_PTR completionKey = overlappedEntries[i].lpCompletionKey;
-            DWORD bytesTransferred = overlappedEntries[i].dwNumberOfBytesTransferred;
+        for (ULONG i = 0; i < num_removed; ++i) {
+            LPOVERLAPPED lpOverlapped = overlapped[i].lpOverlapped;
+            ULONG_PTR completionkey = overlapped[i].lpCompletionKey;
+            DWORD bytes_transferred = overlapped[i].dwNumberOfBytesTransferred;
 
-            if (lpOverlapped == nullptr && completionKey == 0) {
+            if (lpOverlapped == nullptr && completionkey == 0) {
                 LERROR << "lpOverlapped is nullptr.";
                 break;
             }
 
-            auto* pDirInfo = reinterpret_cast<DirectoryInfo*>(completionKey);
-            if (pDirInfo == nullptr) {
-                LERROR << "pDirInfo is nullptr.";
+            auto* dirinfo = reinterpret_cast<DirectoryInfo*>(completionkey);
+            if (dirinfo == nullptr) {
+                LERROR << "dirinfo is nullptr.";
                 continue;
             }
 
-            if (bytesTransferred == 0) {
+            if (bytes_transferred == 0) {
                 continue;
             }
 
-            ZeroMemory(&pDirInfo->overlapped, sizeof(OVERLAPPED));
+            ZeroMemory (&dirinfo->overlapped, sizeof(OVERLAPPED));
 
             success = ReadDirectoryChangesW(
-                pDirInfo->hDir,
-                pDirInfo->buffer,
+                dirinfo->hDir,
+                dirinfo->buffer,
                 BUFFER_SIZE,
                 TRUE,
                 FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-                FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
-                FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_SECURITY,
+                FILE_NOTIFY_CHANGE_SIZE      | FILE_NOTIFY_CHANGE_LAST_WRITE,
                 nullptr,
-                &pDirInfo->overlapped,
+                &dirinfo->overlapped,
                 nullptr);
 
             if (!success) {
@@ -690,14 +694,14 @@ WatchNode::MonitorThread()
                 break;
             }
 
-            FILE_NOTIFY_INFORMATION* pNotify;
+            FILE_NOTIFY_INFORMATION* notify;
             size_t offset = 0;
 
             do {
-                pNotify = (FILE_NOTIFY_INFORMATION*)((BYTE*)pDirInfo->buffer + offset);
+                notify = (FILE_NOTIFY_INFORMATION*)((BYTE*)dirinfo->buffer + offset);
                 bool transmit = false;
 
-                switch (pNotify->Action) {
+                switch (notify->Action) {
                     case FILE_ACTION_ADDED:
                         LDEBUG << "File added: ";
                         transmit = true;
@@ -722,8 +726,8 @@ WatchNode::MonitorThread()
                 }
 
                 if (transmit) {
-                    std::wstring wfilename(pNotify->FileName, pNotify->FileNameLength / sizeof(WCHAR));
-                    std::string filename(wfilename.begin(), wfilename.end());
+                    std::wstring wfilename (notify->FileName, notify->FileNameLength / sizeof(WCHAR));
+                    auto filename = wchar2string (wfilename.c_str());
 
                     // Time-based filtering of duplicates
                     auto now = std::chrono::steady_clock::now();
@@ -734,8 +738,8 @@ WatchNode::MonitorThread()
                     }
                 }
 
-                offset += pNotify->NextEntryOffset;
-            } while (pNotify->NextEntryOffset != 0);
+                offset += notify->NextEntryOffset;
+            } while (notify->NextEntryOffset != 0);
         }
 
         if (!batch_modified_files.empty()) {
@@ -748,19 +752,19 @@ WatchNode::MonitorThread()
     }
 
     return 0;
-}
+} // WatchNode::MonitorThread
 
 
 void
 WatchNode::Monitor (const string& sandbox)
 {
-    SYSTEM_INFO sysInfo;
-    GetSystemInfo(&sysInfo);
-    int numThreads = sysInfo.dwNumberOfProcessors;
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo (&sysinfo);
+    int numthreads = sysinfo.dwNumberOfProcessors;
 
-    std::vector<HANDLE> threadHandles;
+    std::vector<HANDLE> thread_handles;
 
-    for (int i = 0; i < numThreads; ++i) {
+    for (int i = 0; i < numthreads; ++i) {
         HANDLE hThread = CreateThread(
             nullptr,
             0,
@@ -774,7 +778,7 @@ WatchNode::Monitor (const string& sandbox)
             continue;
         }
 
-        threadHandles.push_back (hThread);
+        thread_handles.push_back (hThread);
     }
 
     while (!stopwatching_) {
@@ -796,24 +800,24 @@ WatchNode::Monitor (const string& sandbox)
         }
     }
 
-    for (int i = 0; i < numThreads; ++i) {
+    for (int i = 0; i < numthreads; ++i) {
         PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
     }
 
     WaitForMultipleObjects(
-        static_cast<DWORD> (threadHandles.size()), threadHandles.data(), TRUE, INFINITE);
+        static_cast<DWORD> (thread_handles.size()), thread_handles.data(), TRUE, INFINITE);
 
-    for (HANDLE hThread : threadHandles) {
+    for (HANDLE hThread : thread_handles) {
         CloseHandle (hThread);
     }
 
     CloseHandle (iocp_);
 
-    for (auto pDirInfo : dirinfos_) {
-        CloseHandle (pDirInfo->hDir);
-        delete pDirInfo;
+    for (auto dirinfo : dirinfos_) {
+        CloseHandle (dirinfo->hDir);
+        delete dirinfo;
     }
-}
+} // WatchNode::Monitor
 
 
 void

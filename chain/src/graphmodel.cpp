@@ -183,8 +183,10 @@ GraphModel::updateDaisyNode (NodeDelegateModel* datamodel)
     }
     else if (datamodel->name() == "Watch") {
         bool passthru = datamodel->embeddedWidget()->findChild<QCheckBox*> ("_passthruChk")->isChecked();
+        bool recursive = datamodel->embeddedWidget()->findChild<QCheckBox*> ("_recursiveChk")->isChecked();
         const auto& watchnode = dynamic_cast<WatchNode*> (daisynode.get());
         watchnode->set_passthru (passthru);
+        watchnode->set_recursive (recursive);
     }
 } // GraphModel::updateDaisyNode
 
@@ -428,10 +430,12 @@ GraphModel::createNodeFromNode (const std::shared_ptr<daisychain::Node>& node)
         const auto& watchnode = dynamic_cast<WatchNode*> (node.get());
         const QString name = QString::fromStdString (watchnode->name());
         auto passthru = watchnode->passthru();
+        auto recursive = watchnode->recursive();
 
         datamodel = delegateModel<ChainModel>(qtnode);
         datamodel->setNodeName (name);
         datamodel->embeddedWidget()->findChild<QCheckBox*> ("_passthruChk")->setChecked (passthru);
+        datamodel->embeddedWidget()->findChild<QCheckBox*> ("_recursiveChk")->setChecked (recursive);
     } break;
     case daisychain::DC_INVALID:
         return -1;

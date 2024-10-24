@@ -28,6 +28,10 @@ public:
 
     ~WatchModel() override = default;
 
+    QJsonObject save() const override;
+
+    void load (QJsonObject const &) override;
+
     QWidget* embeddedWidget() override; // embeddedWidget
 
     static QString Name() { return {"Watch"}; } // Name
@@ -35,5 +39,6 @@ public:
     QString name() const override { return WatchModel::Name(); } // name
 
 private:
-    QCheckBox* _passthru;
+    QCheckBox* _passthruChk;
+    QCheckBox* _recursiveChk;
 };
