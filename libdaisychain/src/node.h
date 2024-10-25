@@ -420,7 +420,7 @@ public:
     void OpenWindowsPipes (const string& sandbox_)
     {
         // The GUI will allow duplicate connections on a concat node.
-        // This was the path of least resistance to handle the above case.
+        // This was the path of least resistance to handle this.
         const std::set uniq_outputs (outputs_.begin(), outputs_.end());
         const std::set uniq_inputs (inputs_.begin(), inputs_.end());
 
@@ -455,12 +455,17 @@ public:
         for (const auto& fifo : uniq_outputs) {
             auto pipename = get_pipename (sandbox_, fifo);
             BOOL connected = ConnectNamedPipe (fd_out_[fifo], nullptr);
-
-            if (!connected && GetLastError() != ERROR_PIPE_CONNECTED) {
-                LERROR << LOGNODE << "Error connecting to named pipe: " << pipename;
+            auto error = GetLastError();
+            if (!connected && error != ERROR_PIPE_CONNECTED) {
+                LERROR << LOGNODE << "Error connecting to named pipe: " << error << " " << pipename;
             }
             else {
                 LDEBUG << LOGNODE << "Connected to named pipe: " << pipename;
+                OVERLAPPED overlapped{0};
+                auto event = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+                write_events_.push_back (event);
+                overlapped.hEvent = event;
+                overlapped_writes_.push_back (overlapped);
             }
         }
 
@@ -516,12 +521,12 @@ public:
                 pipeInfo.overlapped.hEvent = pipeInfo.event;
 
                 pipeinfos_.push_back (pipeInfo);
-                events_.push_back (pipeInfo.event);
+                read_events_.push_back (pipeInfo.event);
             }
         }
 
        terminate_event_ = CreateEvent (nullptr, TRUE, FALSE, nullptr);
-       events_.push_back (terminate_event_);
+       read_events_.push_back (terminate_event_);
 
         {
             std::unique_lock lock (close_mutex_);
@@ -564,7 +569,11 @@ public:
             CloseHandle (handle);
         }
 
-        for (const auto& handle : events_) {
+        for (const auto& handle : read_events_) {
+            CloseHandle (handle);
+        }
+
+        for (const auto& handle : write_events_) {
             CloseHandle (handle);
         }
 
@@ -574,13 +583,15 @@ public:
 
         fd_in_.clear();
         fd_out_.clear();
-        events_.clear();
+        read_events_.clear();
+        write_events_.clear();
+        overlapped_writes_.clear();
         pipeinfos_.clear();
         Reset();
     } // ClosePipes
 
 
-    int ReadInputs (std::vector<std::string>& inputs)
+    int ReadInputs(std::vector<std::string>& inputs)
     {
         if (terminate_.load())
             return -1;
@@ -589,9 +600,9 @@ public:
         char cbuffer[BUFFSIZE + 1];
 
         // Issue asynchronous reads for all pipes before waiting for events
-        for (auto& pipeInfo : pipeinfos_) {
-            DWORD dwRead = 0;
-            BOOL stat = ReadFile(pipeInfo.handle, cbuffer, BUFFSIZE, &dwRead, &pipeInfo.overlapped);
+        for (auto& pipeinfo : pipeinfos_) {
+            DWORD bytesread = 0;
+            BOOL stat = ReadFile (pipeinfo.handle, cbuffer, BUFFSIZE, &bytesread, &pipeinfo.overlapped);
 
             if (!stat && GetLastError() != ERROR_IO_PENDING) {
                 DWORD error = GetLastError();
@@ -606,10 +617,10 @@ public:
 
         // Wait for any of the named pipes to signal they have data
         DWORD waitResult = WaitForMultipleObjects(
-            static_cast<DWORD>(events_.size()),  // Number of events
-            events_.data(),                      // Array of event handles
-            FALSE,                               // Wait for any event
-            INFINITE                             // No timeout
+            static_cast<DWORD>(read_events_.size()),  // Number of events
+            read_events_.data(),                      // Array of event handles
+            FALSE,                                    // Wait for any event
+            INFINITE                                  // No timeout
         );
 
         if (waitResult == WAIT_FAILED) {
@@ -617,9 +628,9 @@ public:
             return -1;
         }
 
-        if (waitResult == WAIT_OBJECT_0 + events_.size() - 1) {
+        if (waitResult == WAIT_OBJECT_0 + read_events_.size() - 1) {
             LDEBUG << LOGNODE << "Termination event signaled.";
-            ResetEvent(terminate_event_);
+            ResetEvent (terminate_event_);
             return -1;  // Exit the thread
         }
 
@@ -633,42 +644,72 @@ public:
         PipeInfo& pipeinfo = pipeinfos_[index];
 
         // Use GetOverlappedResult to confirm the read operation and get the number of bytes read
-        DWORD dwRead = 0;
-        BOOL result = GetOverlappedResult(pipeinfo.handle, &pipeinfo.overlapped, &dwRead, TRUE);
+        DWORD bytesread = 0;
+        BOOL result = GetOverlappedResult (pipeinfo.handle, &pipeinfo.overlapped, &bytesread, TRUE);
 
         if (!result) {
             DWORD error = GetLastError();
             if (error == ERROR_BROKEN_PIPE) {
                 LERROR << LOGNODE << "Broken pipe.";
                 return -1;
-            } else {
+            }
+            if (error != ERROR_MORE_DATA) {
                 LERROR << LOGNODE << "GetOverlappedResult failed with error: " << error;
                 return -1;
             }
         }
 
-        // Now handle the read data
-        if (dwRead > 0) {
-            cbuffer[dwRead] = '\0';  // Null-terminate the buffer
-            pipeinfo.partialMessage.append(cbuffer, dwRead);
-            totalbytesread_ += dwRead;
+        // Handle the read data and process it
+        if (bytesread > 0) {
+            cbuffer[bytesread] = '\0';  // Null-terminate the buffer
+            pipeinfo.partialMessage.append (cbuffer, bytesread);
+            totalbytesread_ += bytesread;
         }
 
-        // Process the full message if all data has been received
-        if (GetLastError() != ERROR_MORE_DATA) {
-            LDEBUG << LOGNODE << "Full message received: " << pipeinfo.partialMessage;
+        // Check if more data remains in the message
+        while (result && bytesread == BUFFSIZE) {
+            bytesread = 0;
+            BOOL stat = ReadFile (pipeinfo.handle, cbuffer, BUFFSIZE, &bytesread, &pipeinfo.overlapped);
 
-            // Process the full message here
-            std::string input = pipeinfo.partialMessage;  // Store complete message
-            m_split_input(input, inputs);
+            if (!stat && GetLastError() != ERROR_IO_PENDING) {
+                DWORD error = GetLastError();
+                if (error == ERROR_BROKEN_PIPE) {
+                    LERROR << LOGNODE << "Broken pipe.";
+                } else {
+                    LERROR << LOGNODE << "Error initiating read for remaining data: " << error;
+                }
+                return -1;
+            }
 
-            pipeinfo.partialMessage.clear();  // Clear the buffer for the next message
+            // Wait for the read operation to complete again
+            result = GetOverlappedResult (pipeinfo.handle, &pipeinfo.overlapped, &bytesread, TRUE);
+
+            if (!result) {
+                DWORD error = GetLastError();
+                if (error == ERROR_BROKEN_PIPE) {
+                    LERROR << LOGNODE << "Broken pipe.";
+                    return -1;
+                }
+                if (error != ERROR_MORE_DATA) {
+                    LERROR << LOGNODE << "GetOverlappedResult failed with error: " << error;
+                    return -1;
+                }
+            }
+
+            if (bytesread > 0) {
+                cbuffer[bytesread] = '\0';  // Null-terminate the buffer
+                pipeinfo.partialMessage.append (cbuffer, bytesread);
+                totalbytesread_ += bytesread;
+            }
         }
 
-        // Reset event before returning
-        ResetEvent(pipeinfo.event);
+        std::string input = pipeinfo.partialMessage;  // Store complete message
+        m_split_input (input, inputs);
 
-        if (auto count = ranges::count(inputs, "EOF")) {
+        pipeinfo.partialMessage.clear();  // Clear the buffer for the next message
+        ResetEvent (pipeinfo.event);
+
+        if (auto count = ranges::count (inputs, "EOF")) {
             eofs_ += static_cast<int>(count);
             LDEBUG << LOGNODE << "EOF COUNT: " << eofs_;
         }
@@ -680,58 +721,74 @@ public:
     virtual void WriteOutputs (const std::string& output)
     {
         std::string token = output + '\n';
+        std::vector<DWORD> wrote (fd_out_.size(), 0);
+        std::vector<size_t> byteswritten (fd_out_.size(), 0);
 
+        size_t index = 0;
         for (const auto& [fifo, handle] : fd_out_) {
-            DWORD bytesWritten = 0;
-            size_t written = 0;
+            // Reset necessary fields in the OVERLAPPED structure
+            overlapped_writes_[index].Offset = 0;
+            overlapped_writes_[index].OffsetHigh = 0;
+            ResetEvent (overlapped_writes_[index].hEvent);  // Reset the event before each write
 
-            OVERLAPPED overlappedWrite = { 0 };
-            overlappedWrite.hEvent = CreateEvent (nullptr, TRUE, FALSE, nullptr);  // Manual-reset event
+            while (byteswritten[index] < token.size() && !terminate_.load()) {
+                // Write in manageable chunks (e.g., 64 KB)
+                DWORD chunkSize = static_cast<DWORD>(
+                    std::min<size_t>(64 * 1024, token.size() - byteswritten[index])
+                );
 
-            while (written < token.size() && !terminate_.load()) {
                 // Issue the asynchronous write
                 BOOL fSuccess = WriteFile(
                     handle,
-                    token.data() + written,                  // Pointer to the buffer
-                    static_cast<DWORD>(token.size() - written),  // Bytes remaining to write
-                    &bytesWritten,                           // Immediate bytes written (if synchronous)
-                    &overlappedWrite                         // Overlapped structure for async
+                    token.data() + byteswritten[index], // Pointer to the buffer
+                    chunkSize,                          // Bytes to write in this chunk
+                    &wrote[index],                      // Immediate bytes written (if synchronous)
+                    &overlapped_writes_[index]          // Overlapped structure for async
                 );
 
                 if (!fSuccess) {
                     DWORD error = GetLastError();
                     if (error == ERROR_IO_PENDING) {
-                        // Write is in progress, wait for it to complete
-                        DWORD waitResult = WaitForSingleObject (overlappedWrite.hEvent, INFINITE);
-                        if (waitResult == WAIT_OBJECT_0) {
-                            // The event was signaled, the write operation completed
-                            BOOL overlappedResult = GetOverlappedResult (handle, &overlappedWrite, &bytesWritten, TRUE);
-                            if (!overlappedResult) {
-                                error = GetLastError();
-                                LERROR << LOGNODE << "GetOverlappedResult failed with error: " << error;
-                                break;
-                            }
-                        } else {
-                            LERROR << LOGNODE << "WaitForSingleObject failed.";
-                            break;
+                        // Wait for the event to be signaled (asynchronous completion)
+                        DWORD waitResult = WaitForMultipleObjects(
+                            1,                                 // Number of events
+                            &overlapped_writes_[index].hEvent, // Event to wait on
+                            TRUE,                              // Wait for one
+                            INFINITE                           // No timeout
+                        );
+
+                        if (waitResult == WAIT_FAILED) {
+                            LERROR << LOGNODE << "WaitForMultipleObjects failed : " << GetLastError();
+                            return;
+                        }
+
+                        // Now check the result of the asynchronous write
+                        BOOL overlappedResult = GetOverlappedResult(
+                            handle,
+                            &overlapped_writes_[index],
+                            &wrote[index],
+                            TRUE
+                        );
+
+                        if (!overlappedResult) {
+                            LERROR << LOGNODE << "GetOverlappedResult failed : " << GetLastError();
+                            return;
                         }
                     } else {
                         LERROR << LOGNODE << "WriteFile failed with error: " << error;
-                        break;
+                        return;  // Exit on error
                     }
                 }
 
-                written += bytesWritten;
-                totalbyteswritten_ += bytesWritten;
-
-                // Reset the event for the next iteration
-                ResetEvent (overlappedWrite.hEvent);
+                byteswritten[index] += wrote[index];
+                totalbyteswritten_ += wrote[index];
             }
 
-            FlushFileBuffers(handle);
+            ++index;
+        }
 
-            // Cleanup
-            CloseHandle(overlappedWrite.hEvent);
+        for (const auto& [fifo, handle] : fd_out_) {
+            FlushFileBuffers (handle);
         }
     }
 #endif
@@ -909,7 +966,9 @@ protected:
     };
 
     std::vector<PipeInfo> pipeinfos_;
-    std::vector<HANDLE> events_;
+    std::vector<OVERLAPPED> overlapped_writes_;
+    std::vector<HANDLE> read_events_;
+    std::vector<HANDLE> write_events_;
     HANDLE terminate_event_{};
     bool initialread_ = false;
 

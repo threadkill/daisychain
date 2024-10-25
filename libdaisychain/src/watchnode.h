@@ -108,7 +108,7 @@ private:
     std::queue<string> modified_files_;
     std::vector<DirectoryInfo*> dirinfos_;
     std::unordered_map<string, std::chrono::steady_clock::time_point> notifications_;
-    std::chrono::milliseconds debounce_time = std::chrono::milliseconds (1000);
+    std::chrono::milliseconds debounce_time = std::chrono::milliseconds (2000);
     bool stopwatching_;
 
 #endif
