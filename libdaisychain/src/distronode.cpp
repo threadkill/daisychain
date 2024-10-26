@@ -176,7 +176,8 @@ DistroNode::WriteAnyOutput (const string& output)
             if (!ret && GetLastError() == ERROR_IO_PENDING) {
                 break;
             }
-            else if (numbytes) {
+
+            if (numbytes) {
                 token = output.substr (numbytes) + '\n';
             }
         } while (numbytes < tokensize && !terminate_.load());

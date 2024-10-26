@@ -664,6 +664,7 @@ public:
             cbuffer[bytesread] = '\0';  // Null-terminate the buffer
             pipeinfo.partialMessage.append (cbuffer, bytesread);
             totalbytesread_ += bytesread;
+            LDEBUG << LOGNODE << "Bytes read: " << bytesread;
         }
 
         // Check if more data remains in the message
@@ -679,6 +680,13 @@ public:
                     LERROR << LOGNODE << "Error initiating read for remaining data: " << error;
                 }
                 return -1;
+            }
+
+            // Edge case where the original message is exactly the same size as BUFFSIZE
+            DWORD bytesavailable = 0;
+            BOOL peekstat = PeekNamedPipe (pipeinfo.handle, nullptr, 0, nullptr, &bytesavailable, nullptr);
+            if (!peekstat || bytesavailable == 0) {
+                break;
             }
 
             // Wait for the read operation to complete again
@@ -714,6 +722,8 @@ public:
             LDEBUG << LOGNODE << "EOF COUNT: " << eofs_;
         }
 
+        LDEBUG << LOGNODE << "Total Bytes read: " << totalbytesread_;
+
         return (eofs_ == fd_in_.size()) ? -1 : eofs_;
     }
 
@@ -726,7 +736,7 @@ public:
         std::string token = output + '\n';
         std::vector<DWORD> byteswritten (fd_out_.size(), 0); // Tracks bytes written for each pipe
         std::vector<HANDLE> events;                          // Events for overlapped writes to wait for
-        std::vector<bool> completed (fd_out_.size(), false); // Track if writes are complete
+        std::vector completed (fd_out_.size(), false);       // Track if writes are complete
 
         size_t index = 0;
 
@@ -744,16 +754,17 @@ public:
             // Issue the asynchronous write
             BOOL fSuccess = WriteFile(
                 handle,
-                token.data(),                               // Pointer to the buffer
-                static_cast<DWORD>(token.size()),           // Total size of the token to write
-                &byteswritten[index],                       // Immediate bytes written (if synchronous)
-                &overlapped_writes_[index]                  // Overlapped structure for async
+                token.data(),                     // Pointer to the buffer
+                static_cast<DWORD>(token.size()), // Total size of the token to write
+                &byteswritten[index],             // Immediate bytes written (if synchronous)
+                &overlapped_writes_[index]        // Overlapped structure for async
             );
 
             if (fSuccess) {
                 // Write completed synchronously
                 totalbyteswritten_ += byteswritten[index];
                 completed [index] = true;
+                FlushFileBuffers (handle);
                 LDEBUG << LOGNODE << "Write completed synchronously for pipe handle: " << handle;
             } else {
                 DWORD error = GetLastError();
@@ -819,7 +830,7 @@ public:
                 totalbyteswritten_ += dwWritten;
                 completed [index] = true;  // Mark this write as complete
 
-                FlushFileBuffers(handle);
+                FlushFileBuffers (handle);
             }
 
             // Check if all writes are complete
