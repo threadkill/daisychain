@@ -720,79 +720,116 @@ public:
 
     virtual void WriteOutputs (const std::string& output)
     {
+        if (terminate_.load())
+            return;
+
         std::string token = output + '\n';
-        std::vector<DWORD> wrote (fd_out_.size(), 0);
-        std::vector<size_t> byteswritten (fd_out_.size(), 0);
+        std::vector<DWORD> byteswritten (fd_out_.size(), 0); // Tracks bytes written for each pipe
+        std::vector<HANDLE> events;                          // Events for overlapped writes to wait for
+        std::vector<bool> completed (fd_out_.size(), false); // Track if writes are complete
 
         size_t index = 0;
-        for (const auto& [fifo, handle] : fd_out_) {
+
+        // Issue asynchronous writes for all pipes
+        for (auto it = fd_out_.begin(); it != fd_out_.end(); ++it) {
+            HANDLE handle = it->second;
+
             // Reset necessary fields in the OVERLAPPED structure
             overlapped_writes_[index].Offset = 0;
             overlapped_writes_[index].OffsetHigh = 0;
-            ResetEvent (overlapped_writes_[index].hEvent);  // Reset the event before each write
 
-            while (byteswritten[index] < token.size() && !terminate_.load()) {
-                // Write in manageable chunks (e.g., 64 KB)
-                DWORD chunkSize = static_cast<DWORD>(
-                    std::min<size_t>(64 * 1024, token.size() - byteswritten[index])
-                );
+            // Reset the event handle before issuing the write
+            ResetEvent (overlapped_writes_[index].hEvent);
 
-                // Issue the asynchronous write
-                BOOL fSuccess = WriteFile(
-                    handle,
-                    token.data() + byteswritten[index], // Pointer to the buffer
-                    chunkSize,                          // Bytes to write in this chunk
-                    &wrote[index],                      // Immediate bytes written (if synchronous)
-                    &overlapped_writes_[index]          // Overlapped structure for async
-                );
+            // Issue the asynchronous write
+            BOOL fSuccess = WriteFile(
+                handle,
+                token.data(),                               // Pointer to the buffer
+                static_cast<DWORD>(token.size()),           // Total size of the token to write
+                &byteswritten[index],                       // Immediate bytes written (if synchronous)
+                &overlapped_writes_[index]                  // Overlapped structure for async
+            );
 
-                if (!fSuccess) {
-                    DWORD error = GetLastError();
-                    if (error == ERROR_IO_PENDING) {
-                        // Wait for the event to be signaled (asynchronous completion)
-                        DWORD waitResult = WaitForMultipleObjects(
-                            1,                                 // Number of events
-                            &overlapped_writes_[index].hEvent, // Event to wait on
-                            TRUE,                              // Wait for one
-                            INFINITE                           // No timeout
-                        );
-
-                        if (waitResult == WAIT_FAILED) {
-                            LERROR << LOGNODE << "WaitForMultipleObjects failed : " << GetLastError();
-                            return;
-                        }
-
-                        // Now check the result of the asynchronous write
-                        BOOL overlappedResult = GetOverlappedResult(
-                            handle,
-                            &overlapped_writes_[index],
-                            &wrote[index],
-                            TRUE
-                        );
-
-                        if (!overlappedResult) {
-                            LERROR << LOGNODE << "GetOverlappedResult failed : " << GetLastError();
-                            return;
-                        }
-                    } else {
-                        LERROR << LOGNODE << "WriteFile failed with error: " << error;
-                        return;  // Exit on error
-                    }
+            if (fSuccess) {
+                // Write completed synchronously
+                totalbyteswritten_ += byteswritten[index];
+                completed [index] = true;
+                LDEBUG << LOGNODE << "Write completed synchronously for pipe handle: " << handle;
+            } else {
+                DWORD error = GetLastError();
+                if (error == ERROR_IO_PENDING) {
+                    // Write is pending, add the event handle to the list of events to wait for
+                    events.push_back (overlapped_writes_[index].hEvent);
+                } else {
+                    LERROR << LOGNODE << "WriteFile failed with error: " << error;
+                    return;  // Exit on error
                 }
-
-                byteswritten[index] += wrote[index];
-                totalbyteswritten_ += wrote[index];
             }
 
             ++index;
         }
 
-        for (const auto& [fifo, handle] : fd_out_) {
-            FlushFileBuffers (handle);
+        if (events.empty()) {
+            // Writes finished synchronously
+            return;
+        }
+
+        // Add the termination event to the list of events to wait for
+        events.push_back (terminate_event_);
+
+        // Loop until all writes are complete or the termination event is signaled
+        while (true) {
+            DWORD waitResult = WaitForMultipleObjects(
+                static_cast<DWORD>(events.size()),  // Number of events
+                events.data(),                      // Array of event handles
+                FALSE,                              // Wait for any event
+                INFINITE                            // No timeout
+            );
+
+            if (waitResult == WAIT_FAILED) {
+                LERROR << LOGNODE << "WaitForMultipleObjects failed with error: " << GetLastError();
+                return;
+            }
+
+            // Handle termination event
+            if (waitResult == WAIT_OBJECT_0 + events.size() - 1) {
+                LDEBUG << LOGNODE << "Termination event signaled, exiting WriteOutputs.";
+                return;
+            }
+
+            // Handle completed write event
+            index = waitResult - WAIT_OBJECT_0;
+            if (index < fd_out_.size()) {
+                HANDLE handle = std::next (fd_out_.begin(), index)->second;
+
+                DWORD dwWritten = 0;
+                BOOL overlappedResult = GetOverlappedResult(
+                    handle,
+                    &overlapped_writes_[index],
+                    &dwWritten,
+                    TRUE
+                );
+
+                if (!overlappedResult) {
+                    DWORD error = GetLastError();
+                    LERROR << LOGNODE << "GetOverlappedResult failed with error: " << error;
+                    return;
+                }
+
+                totalbyteswritten_ += dwWritten;
+                completed [index] = true;  // Mark this write as complete
+
+                FlushFileBuffers(handle);
+            }
+
+            // Check if all writes are complete
+            if (ranges::all_of (completed , [](bool complete) { return complete; })) {
+                break;
+            }
         }
     }
-#endif
 
+#endif
 
     virtual void Cleanup()
     {
