@@ -205,6 +205,10 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
     }
 
 #ifdef _WIN32
+#ifdef _DEBUG
+    _putenv (R"(COMSPEC=C:\Windows\System32\cmd.exe)");
+    _putenv (R"(PATH=%PATH%;C:\Windows\System32)");
+#endif
     FILE* fp = _popen (command_.c_str(), "r");
 #else
     // setting IFS explicitly to newline-only facilitates handling paths with spaces.

@@ -608,7 +608,8 @@ public:
                 DWORD error = GetLastError();
                 if (error == ERROR_BROKEN_PIPE) {
                     LERROR << LOGNODE << "Broken pipe.";
-                } else {
+                }
+                else {
                     LERROR << LOGNODE << "Error initiating asynchronous read: " << error;
                 }
                 return -1;
@@ -676,7 +677,8 @@ public:
                 DWORD error = GetLastError();
                 if (error == ERROR_BROKEN_PIPE) {
                     LERROR << LOGNODE << "Broken pipe.";
-                } else {
+                }
+                else {
                     LERROR << LOGNODE << "Error initiating read for remaining data: " << error;
                 }
                 return -1;
@@ -766,12 +768,14 @@ public:
                 completed [index] = true;
                 FlushFileBuffers (handle);
                 LDEBUG << LOGNODE << "Write completed synchronously for pipe handle: " << handle;
-            } else {
+            }
+            else {
                 DWORD error = GetLastError();
                 if (error == ERROR_IO_PENDING) {
                     // Write is pending, add the event handle to the list of events to wait for
                     events.push_back (overlapped_writes_[index].hEvent);
-                } else {
+                }
+                else {
                     LERROR << LOGNODE << "WriteFile failed with error: " << error;
                     return;  // Exit on error
                 }

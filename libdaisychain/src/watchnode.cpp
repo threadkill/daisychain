@@ -52,7 +52,7 @@ WatchNode::Initialize (json& keydata, bool keep_uuid)
     }
 
     if (data.count ("recursive")) {
-        set_passthru (data["recursive"]);
+        set_recursive (data["recursive"]);
     }
 } // WatchNode::Initialize
 

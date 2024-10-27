@@ -121,42 +121,65 @@ DistroNode::CloseNextOutput()
 void
 DistroNode::WriteNextOutput (const string& output)
 {
-    string token = output + '\n';
+    std::string token = output + '\n';
 
     if (output_it_ == outputs_.end()) {
         output_it_ = outputs_.begin();
     }
 
-    auto handle = fd_out_[*output_it_];
+    HANDLE handle = fd_out_[*output_it_];
+    OVERLAPPED& overlapped_write = overlapped_writes_[std::distance (outputs_.begin(), output_it_)];
 
-    DWORD write = 0;
+    DWORD wrote = 0;
     size_t written = 0;
 
     while (written < token.size() && !terminate_.load()) {
-        BOOL fSuccess = WriteFile (
+        BOOL fSuccess = WriteFile(
             handle,
             token.data() + written,
-            static_cast<DWORD> (token.size() - written),
-            &write,
-            nullptr);
+            static_cast<DWORD>(token.size() - written),
+            &wrote,
+            &overlapped_write
+        );
 
         if (!fSuccess) {
-            break;
-        }
-        /*
-        if (numbytes) {
-            token = output.substr (numbytes) + '\n';
-        }
-        */
+            DWORD error = GetLastError();
+            if (error == ERROR_IO_PENDING) {
+                // Wait for the write operation to complete or for the terminate event
+                HANDLE events[] = { overlapped_write.hEvent, terminate_event_ };
+                DWORD wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
 
-        written += write;
-        totalbyteswritten_ += write;
+                if (wait_result == WAIT_OBJECT_0 + 1) {  // Termination event signaled
+                    LDEBUG << LOGNODE << "Termination event signaled, exiting WriteNextOutput.";
+                    return;
+                }
+
+                BOOL overlapped_result = GetOverlappedResult (handle, &overlapped_write, &wrote, TRUE);
+                if (!overlapped_result) {
+                    DWORD overlapped_error = GetLastError();
+                    LERROR << LOGNODE << "GetOverlappedResult failed with error: " << overlapped_error;
+                    return;
+                }
+            }
+            else if (error == ERROR_BROKEN_PIPE) {
+                LERROR << LOGNODE << "Broken pipe for handle: " << handle;
+                return;
+            }
+            else {
+                LERROR << LOGNODE << "WriteFile failed with error: " << error;
+                return;
+            }
+        }
+
+        written += wrote;
+        totalbyteswritten_ += wrote;
+        ResetEvent (overlapped_write.hEvent);
     }
 
-    output_it_++;
-
     FlushFileBuffers (handle);
+    ++output_it_;
 } // DistroNode::WriteNextOutput
+
 
 
 void
