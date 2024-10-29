@@ -272,7 +272,7 @@ Graph::Execute (const string& input)
 bool
 Graph::Execute (const string& input, json& env)
 {
-    TIMED_FUNC (timerObj);
+    TIMED_SCOPE (timerObj, "Graph::Execute()");
     //setbuf (stdout, nullptr);
 
     if (!PrepareFileSystem()) {

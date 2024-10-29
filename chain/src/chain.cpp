@@ -30,15 +30,11 @@ main (int argc, char* argv[])
     configureLogger();
     LINFO << "DaisyChain " << DAISYCHAIN_VERSION;
 
-    //QApplication::setAttribute (Qt::AA_DisableWindowContextHelpButton);
-    //QApplication::setAttribute (Qt::AA_DisableHighDpiScaling);
-
     QApplication::setStyle (QStyleFactory::create ("fusion"));
     setNodeStyle();
     QApplication::setPalette (darkPalette());
 
     QApplication app (argc, argv);
-
     QApplication::setWindowIcon (QIcon (":daisy_alpha.png"));
 
     QCoreApplication::setOrganizationName ("threadkill");
@@ -46,14 +42,24 @@ main (int argc, char* argv[])
     QCoreApplication::setApplicationVersion (QT_VERSION_STR);
     QCoreApplication::setAttribute (Qt::AA_DontUseNativeMenuBar);
 
-    // QCoreApplication::setAttribute (Qt::AA_Use96Dpi);
+    QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
 
     ChainWindow chainWin;
+    auto centered = screenGeometry.center() - chainWin.frameGeometry().center();
 
-    chainWin.show();
-    chainWin.resize (1280, 1024);
-    chainWin.move (QGuiApplication::screens().at (0)->geometry().center()
-                   - chainWin.frameGeometry().center());
+    QPixmap splashImage (":daisy_alpha_big.png");
+    QSplashScreen splash (splashImage);
+    splash.show();
 
-    return app.exec();
+    QTimer::singleShot (1000, [&] {
+        splash.finish (&chainWin);
+        chainWin.showMinimized();
+        chainWin.showNormal();
+        chainWin.resize (1280, 1024);
+        chainWin.move (centered);
+        chainWin.raise();
+        chainWin.activateWindow();
+    });
+
+    return QApplication::exec();
 } // main

@@ -721,7 +721,7 @@ ChainWindow::showGraph (bool compact)
         testbtn->setVisible (true);
         resizeDocks ({browserdock}, {sidewidth_}, Qt::Horizontal);
         resizeDocks ({loggerdock}, {bottomheight_}, Qt::Vertical);
-        resizeDocks ({loggerdock, notesdock}, {100, 50}, Qt::Horizontal);
+        resizeDocks ({loggerdock, notesdock}, {1000, 300}, Qt::Horizontal);
         fitInView();
     }
 

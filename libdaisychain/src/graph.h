@@ -44,7 +44,9 @@
 #include "config.h"
 #endif // if HAVE_CONFIG_H
 
-#define DAISYCHAIN_VERSION "0.8"
+#ifndef DAISYCHAIN_VERSION
+#define DAISYCHAIN_VERSION "0.0.0"
+#endif
 
 using std::string;
 

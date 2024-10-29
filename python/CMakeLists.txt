@@ -14,4 +14,5 @@ if (Python_FOUND)
 
     pybind11_add_module (pydaisychain MODULE ${pydaisychain_SOURCES})
     target_link_libraries (pydaisychain PRIVATE daisychain_static)
+    install (TARGETS pydaisychain DESTINATION python3)
 endif()
