@@ -863,7 +863,6 @@ public:
         totalbytesread_ = 0;
         totalbyteswritten_ = 0;
         terminate_.store (false);
-        initialread_ = false;
     }
 
     DaisyNodeType type() { return type_; }
@@ -1022,7 +1021,6 @@ protected:
     std::vector<HANDLE> read_events_;
     std::vector<HANDLE> write_events_;
     HANDLE terminate_event_{};
-    bool initialread_ = false;
 
     map<const string, HANDLE> fd_in_;
     map<const string, HANDLE> fd_out_;

@@ -33,7 +33,9 @@ public:
 
     bool Execute (vector<string>& input, const string& sandbox, json& vars) override;
 
+#ifdef _WIN32
     void Stop() override;
+#endif
 
     json Serialize() override;
 
@@ -44,14 +46,14 @@ public:
 #ifndef _WIN32
         fd_in_.clear();
         fd_out_.clear();
+#else
+        stopwatching_ = false;
+        watch_handle_map_.clear();  // only directories can be watched on windows
+        watch_files_.clear();       // explicitly watched files
 #endif
         eofs_ = 0;
         totalbytesread_ = 0;
         totalbyteswritten_ = 0;
-        stopwatching_ = false;
-        watch_handle_map_.clear();  // only directories can be watched on windows
-        watch_files_.clear();       // explicitly watched files
-        //modified_files_;
     }
 
     bool passthru() const { return passthru_; }

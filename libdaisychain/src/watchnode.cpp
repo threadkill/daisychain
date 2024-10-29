@@ -26,9 +26,11 @@ using namespace filesystem;
 
 WatchNode::WatchNode() :
     passthru_ (false),
-    recursive_ (true),
-    stopwatching_ (false)
+    recursive_ (true)
 {
+#ifdef _WIN32
+    stopwatching_ = false;
+#endif
     type_ = DaisyNodeType::DC_WATCH;
     batch_ = true;
     set_name (DaisyNodeNameByType[type_]);
