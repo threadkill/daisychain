@@ -28,9 +28,6 @@ jobs:
           arch: win64_msvc2019_64
           modules: qtbase
 
-      - name: Set up CMake
-        uses: actions/setup-cmake@v3
-
       - name: Configure CMake
         run: |
           cmake -S . -B build \
