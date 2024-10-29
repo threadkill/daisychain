@@ -965,6 +965,9 @@ ChainWindow::closeEvent (QCloseEvent* event)
     else {
         event->ignore();
     }
+
+    trayicon_->setVisible (false);
+    trayicon_->deleteLater();
 } // ChainWindow::closeEvent
 
 

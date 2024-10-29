@@ -3,9 +3,6 @@ project (chain)
 
 # Define compile options
 add_compile_definitions (ELPP_NO_LOG_TO_FILE=1)
-if (WIN32)
-    add_compile_options (/W4)
-endif()
 
 if (APPLE)
     # Suppresses ranlib warnings for no symbols found
@@ -28,9 +25,6 @@ add_subdirectory (
     ${CMAKE_CURRENT_BINARY_DIR}/nodeeditor
     EXCLUDE_FROM_ALL
 )
-if (WIN32)
-    target_compile_options (QtNodes INTERFACE "/W4")
-endif()
 
 # Include source directories
 include_directories (
@@ -162,11 +156,17 @@ elseif (WIN32)
         COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR} ${CMAKE_CPACK_COMMAND} -C ${CMAKE_BUILD_TYPE}
         DEPENDS install
     )
+
+    if (MSVC)
+        target_compile_options (chain PRIVATE /W3 /wd4100)
+        target_compile_options (QtNodes INTERFACE /W3)
+        target_link_options (chain PRIVATE /IGNORE:4217 /IGNORE:4286)
+    endif()
 else()
     add_executable (chain ${chain_SOURCES})
     install (TARGETS chain DESTINATION .)
 endif()
 
 # Link necessary libraries
-target_link_libraries (chain PRIVATE daisychain_static QtNodes Qt6::Widgets)
+target_link_libraries (chain PRIVATE daisychain_static Qt6::Widgets QtNodes)
 set_target_properties (chain PROPERTIES CXX_VISIBILITY_PRESET "hidden")
