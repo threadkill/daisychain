@@ -40,14 +40,12 @@ jobs:
         run: cmake --build build --target run_cpack --config Release -j
 
       - name: Rename Executable with Tag Version
-        run: |
-          mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
-          echo "file_path=build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe" >> $GITHUB_ENV
+        run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ github.event.inputs.tag }}  # Use the specified tag
-          files: ${{ env.file_path }}
+          tag_name: ${{ github.event.inputs.tag }}
+          files: build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
