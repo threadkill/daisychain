@@ -1,5 +1,6 @@
-[![macOS-latest Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml)
-[![macOS-12 Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-12-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-12-qt6-dmg.yml)
+[![Windows Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-windows-latest-qt6-exe.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/win-latest)
+[![macOS-latest Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/macos-latest)
+[![macOS-12 Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-12-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/macos-12-latest)
 
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
 
