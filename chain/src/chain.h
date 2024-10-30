@@ -16,5 +16,10 @@
 
 #pragma once
 
+#include <QApplication>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
+
+#include "chainstyles.h"
 #include "chainwindow.h"
 #include "logger.h"

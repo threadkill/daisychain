@@ -14,12 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include <QApplication>
-#include <QCommandLineOption>
-#include <QCommandLineParser>
-
 #include "chain.h"
-#include "chainstyles.h"
 
 
 int
@@ -44,21 +39,22 @@ main (int argc, char* argv[])
 
     QRect screenGeometry = QGuiApplication::primaryScreen()->geometry();
 
-    ChainWindow chainWin;
-    auto centered = screenGeometry.center() - chainWin.frameGeometry().center();
-
     QPixmap splashImage (":daisy_alpha_big.png");
     QSplashScreen splash (splashImage);
+    splash.setWindowFlags (splash.windowFlags() | Qt::WindowStaysOnTopHint | Qt::FramelessWindowHint);
     splash.show();
 
-    QTimer::singleShot (1000, [&] {
-        splash.finish (&chainWin);
+    ChainWindow chainWin;
+
+    QTimer::singleShot (1500, [&] {
         chainWin.showMinimized();
         chainWin.showNormal();
         chainWin.resize (1280, 1024);
+        auto centered = screenGeometry.center() - chainWin.frameGeometry().center();
         chainWin.move (centered);
         chainWin.raise();
         chainWin.activateWindow();
+        splash.finish (&chainWin);
     });
 
     return QApplication::exec();
