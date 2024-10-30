@@ -15,12 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include <fcntl.h>
+#ifndef _WIN32
 #include <unistd.h>
+#include <cerrno>
+#endif
 
 #include <QGuiApplication>
 #include <QMenu>
 #include <QResizeEvent>
-#include <QThread>
 #include <utility>
 
 #include "logwidget.h"
@@ -28,12 +30,11 @@
 #include "chainstyles.h"
 
 
-LogWidget::LogWidget (std::string filename, QWidget* parent) :
-    QTextEdit (parent),
-    notifier{nullptr},
-    logfile (std::move (filename))
+LogWidget::LogWidget (const std::string& filename, QWidget* parent) :
+    QTextEdit (parent), logfile_ (QString::fromStdString (filename))
 {
-    auto highlighter = new LogHighlighter (this->document());
+    auto highlighter = new LogHighlighter();
+    highlighter->setDocument (this->document());
 
     setPalette (darkPalette());
 
@@ -46,16 +47,9 @@ LogWidget::LogWidget (std::string filename, QWidget* parent) :
     auto font = chain::chainfont();
     font.setPixelSize (11);
     setFont (font);
-    setDocumentTitle (QString::fromStdString (logfile));
+    setDocumentTitle (logfile_);
 
-    notifier = new LogNotifier();
-    auto thread = new QThread();
-
-    connect (thread, &QThread::started, notifier, &LogNotifier::monitor);
-    connect (notifier, &LogNotifier::fileChanged, this, &LogWidget::readLogFile);
-
-    notifier->moveToThread (thread);
-    thread->start();
+    watcher_ = new QFileSystemWatcher (this);
 
     setContextMenuPolicy (Qt::CustomContextMenu);
 
@@ -88,54 +82,130 @@ LogWidget::LogWidget (std::string filename, QWidget* parent) :
     connect (actions_["clear"], &QAction::triggered, this, &LogWidget::storeFileOffset);
     connect (actiongroup, &QActionGroup::triggered, this, &LogWidget::logLevel);
     connect (this, &LogWidget::customContextMenuRequested, this, &LogWidget::showContextMenu);
+    connect (watcher_, &QFileSystemWatcher::fileChanged, this, &LogWidget::readLogFile);
 }
 
 
 LogWidget::~LogWidget()
 {
-    for (const auto& fd_ : openfiles_) {
-        ::close (fd_.second);
+    for (const auto& [filename, handle] : openfiles_) {
+#ifdef _WIN32
+        CloseHandle (handle);
+#else
+        ::close (handle);
+#endif
     }
 }
 
 
+#ifdef _WIN32
 void
 LogWidget::setLogFile (const std::string& filename)
 {
-    logfile = filename;
-    if (!openfiles_.count (filename)) {
-        fd = ::open (logfile.c_str(), O_RDONLY);
+    logfile_ = QString::fromStdString (filename);
+
+    if (!openfiles_.contains (logfile_)) {
+        fd = CreateFileA (
+            filename.c_str(),
+            GENERIC_READ,
+            FILE_SHARE_WRITE,
+            nullptr,
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            nullptr);
+
+        if (fd == INVALID_HANDLE_VALUE) {
+            LERROR << "Could not open log file for reading: " + filename + " " << GetLastError();
+            return;
+        }
+        openfiles_[logfile_] = fd;
+    } else {
+        fd = openfiles_[logfile_];
+    }
+
+    // If there is an offset for this file, seek to it
+    if (offsets_.contains (logfile_)) {
+        SetFilePointerEx (fd, offsets_[logfile_], nullptr, FILE_BEGIN);
+    } else {
+        SetFilePointerEx (fd, {0}, nullptr, FILE_BEGIN);
+    }
+
+    clear();
+    readLogFile (logfile_);
+    watcher_->addPath (logfile_);
+}
+
+#else
+void
+LogWidget::setLogFile (const std::string& filename)
+{
+    logfile_ = QString::fromStdString (filename);
+    if (!openfiles_.contains (logfile_)) {
+        fd = ::open (filename.c_str(), O_RDONLY);
         if (fd  == -1) {
-            LERROR << "Could not open log file for reading: " << logfile;
+            LERROR << "Could not open log file for reading: " << filename;
         }
         else {
-            openfiles_[filename] = fd;
-            notifier->setLogFile (logfile);
+            openfiles_[logfile_] = fd;
         }
     }
     else {
-        fd = openfiles_[filename];
+        fd = openfiles_[logfile_];
     }
 
-    if (offsets_.count (fd)) {
+    if (offsets_.contains (fd)) {
         lseek (fd, offsets_[fd], SEEK_SET);
     }
     else {
         lseek (fd, 0, SEEK_SET);
     }
-    clear();
-    readLogFile (logfile);
-}
 
+    clear();
+    readLogFile (logfile_);
+    watcher_->addPath (logfile_);
+}
+#endif
+
+
+#ifdef _WIN32
+void
+LogWidget::readLogFile (const QString& filename) {
+    if (logfile_ != filename) {
+        return;
+    }
+
+    fd = openfiles_[logfile_];
+    constexpr DWORD BUFFSIZE = 8192; // Buffer size for reading
+    char cbuffer[BUFFSIZE + 1]; // Extra byte for null terminator
+    DWORD numbytes = 0; // Number of bytes read
+
+    do {
+        BOOL result = ReadFile (fd, cbuffer, BUFFSIZE, &numbytes, nullptr);
+        if (result && numbytes > 0) {
+            cbuffer[numbytes] = '\0';
+            moveCursor (QTextCursor::End);
+            insertPlainText (QString::fromUtf8 (cbuffer, static_cast<int> (numbytes)));
+            moveCursor (QTextCursor::End);
+        } else if (!result) {
+            DWORD error = GetLastError();
+            if (error != ERROR_HANDLE_EOF && error != ERROR_IO_PENDING) {
+                LERROR << "Error reading log file: " + filename.toStdString();
+                return;
+            }
+        }
+    } while (numbytes > 0);
+} // LogWidget::readLogFile
+
+#else
 
 void
-LogWidget::readLogFile(const std::string& filename)
+LogWidget::readLogFile(const QString& filename)
 {
-    if (logfile != filename) {
+    if (logfile_ != filename) {
         return;
     }
     else {
-        fd = openfiles_[filename];
+        fd = openfiles_[logfile_];
     }
 
     uint32_t BUFFSIZE = 8192;
@@ -152,6 +222,7 @@ LogWidget::readLogFile(const std::string& filename)
         }
     } while (numbytes > 0 || (numbytes == -1 && errno == EINTR));
 } // LogWidget::readLogFile
+#endif
 
 
 void
@@ -211,5 +282,12 @@ LogWidget::resizeEvent (QResizeEvent* event)
 void
 LogWidget::storeFileOffset()
 {
+#ifdef _WIN32
+    LARGE_INTEGER currentPosition;
+
+    SetFilePointerEx (fd, {0}, &currentPosition, FILE_CURRENT);
+    offsets_[logfile_] = currentPosition;
+#else
     offsets_[fd] = lseek (fd, 0, SEEK_CUR);
+#endif
 }

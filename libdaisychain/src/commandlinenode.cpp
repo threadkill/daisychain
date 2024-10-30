@@ -23,14 +23,15 @@ namespace daisychain {
 using namespace std;
 
 
-CommandLineNode::CommandLineNode() : Node()
+CommandLineNode::CommandLineNode()
 {
     type_ = DaisyNodeType::DC_COMMANDLINE;
     set_name (DaisyNodeNameByType[type_]);
 }
 
 
-CommandLineNode::CommandLineNode (string cmd) : Node(), command_ (std::move (cmd))
+CommandLineNode::CommandLineNode (string cmd) :
+    command_ (std::move (cmd))
 {
     type_ = DaisyNodeType::DC_COMMANDLINE;
     set_name (DaisyNodeNameByType[type_]);
@@ -64,7 +65,11 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
 
     // prepare the shell environment
     for (auto& [key, value] : env.items()) {
+#ifdef _WIN32
+        if (!SetEnvironmentVariable (key.c_str(), shell_expand (value.get<string>()).c_str()))
+#else
         if (setenv (key.c_str(), shell_expand (value.get<string>()).c_str(), true) < 0)
+#endif
             return false;
     }
 
@@ -76,7 +81,7 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
         }
 
         for (auto& input : inputs) {
-            if (input != "EOF") {
+            if (input != "EOF" && !terminate_.load()) {
                 stat = run_command (input, sandbox);
 
                 if (!stat)
@@ -86,7 +91,7 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
     }
     else {
         // tokenized processing which continues until EOF.
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     // performs open/write/close on outputs.
@@ -102,12 +107,11 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
 
             inputs.clear();
 
-            if (eofs_ == fd_in_.size()) {
+            if (eofs_ == fd_in_.size() || terminate_.load()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+
+            ReadInputs (inputs);
         }
 
         CloseInputs();
@@ -118,6 +122,7 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return stat;
 } // CommandLineNode::Execute
@@ -161,7 +166,19 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     auto output = input;
 
+#ifdef _WIN32
+    // replacing newline delimiters with spaces before shell expansion.
+    auto input_ = input;
+    for (char& ch : input_) {
+        if (ch == '\n') {
+            ch = ' ';
+        }
+    }
+
+    if (!SetEnvironmentVariable ("INPUT", shell_expand (input_).c_str()))
+#else
     if (setenv ("INPUT", shell_expand (input).c_str(), true) < 0)
+#endif
         return false;
 
     if (!outputfile_.empty()) {
@@ -170,7 +187,11 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         }
         else {
             output = shell_expand (outputfile_);
+#ifdef _WIN32
+            SetEnvironmentVariable ("OUTPUT", output.c_str());
+#else
             setenv ("OUTPUT", output.c_str(), true);
+#endif
         }
     }
 
@@ -183,10 +204,18 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         return true;
     }
 
+#ifdef _WIN32
+#ifdef _DEBUG
+    _putenv (R"(COMSPEC=C:\Windows\System32\cmd.exe)");
+    _putenv (R"(PATH=%PATH%;C:\Windows\System32)");
+#endif
+    FILE* fp = _popen (command_.c_str(), "r");
+#else
     // setting IFS explicitly to newline-only facilitates handling paths with spaces.
     // redirecting stderr to stdout for log capture.
     string cmd = "IFS=\"\n\";" + command_ + " 2>&1";
     FILE* fp = popen (cmd.c_str(), "r");
+#endif
 
     if (fp == nullptr) {
         stat = false;
@@ -200,7 +229,11 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         }
     }
 
+#ifdef _WIN32
+    if (_pclose (fp) == 0) {
+#else
     if (pclose (fp) == 0) {
+#endif
         stat = true;
     }
 
@@ -218,9 +251,14 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         }
 
         OpenOutputs (sandbox);
+
         // capture program output and use for output var.
         if (use_std_out) {
+#ifdef _WIN32
+            SetEnvironmentVariable ("STDOUT", std_out.c_str());
+#else
             setenv ("STDOUT", std_out.c_str(), true);
+#endif
             output = shell_expand (outputfile_);
             m_split_input (output, tokens);
 

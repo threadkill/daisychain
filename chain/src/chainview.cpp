@@ -98,11 +98,11 @@ ChainView::dropEvent (QDropEvent* event)
         auto urls = event->mimeData()->urls();
 
         for (const auto& url : urls) {
-            if (url.path().endsWith (".dcg")) {
+            if (url.toLocalFile().endsWith (".dcg")) {
                 graph = url.path();
             }
             else {
-                auto path = url.path().toStdString();
+                auto path = url.toLocalFile().toStdString();
                 paths += path + '\n';
             }
         }

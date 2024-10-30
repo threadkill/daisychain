@@ -29,11 +29,11 @@ public:
 
     void OpenNextOutput (const string& sandbox);
 
+    void CloseNextOutput();
+
     void WriteNextOutput (const string& output);
 
     void WriteAnyOutput (const string& output);
-
-    void CloseNextOutput();
 
 private:
     list<string>::iterator output_it_;

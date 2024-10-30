@@ -29,7 +29,7 @@ static std::function<void (int)> sigint_handler;
 static std::function<void (int)> sigterm_handler;
 
 
-static void
+inline void
 signal_handler (int signal)
 {
     switch (signal) {

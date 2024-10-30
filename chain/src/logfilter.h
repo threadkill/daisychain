@@ -21,7 +21,9 @@
 #pragma once
 
 #include <fcntl.h>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #include "logger.h"
 
 
@@ -40,7 +42,11 @@ public:
     void dispatch (el::base::type::string_t&&) noexcept;
 
 private:
+#ifdef _WIN32
+    HANDLE fd{};
+#else
     int fd = 0;
+#endif
     std::string pattern_;
     std::string logfile_;
 };

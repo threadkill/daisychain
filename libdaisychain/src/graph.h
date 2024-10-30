@@ -23,9 +23,11 @@
 #include <fstream>
 #include <iostream>
 #include <string>
-#include <sys/wait.h>
 #include <stack>
 #include <set>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 #include "logger.h"
 #include "node.h"
@@ -42,7 +44,9 @@
 #include "config.h"
 #endif // if HAVE_CONFIG_H
 
-#define DAISYCHAIN_VERSION "0.8"
+#ifndef DAISYCHAIN_VERSION
+#define DAISYCHAIN_VERSION "0.0.0"
+#endif
 
 using std::string;
 
@@ -78,6 +82,8 @@ public:
     bool Test();
 
     void Terminate();
+
+    void CloseHandles();
 
     bool Cleanup();
 
@@ -123,6 +129,8 @@ public:
 
     bool test_flag() const;
 
+    [[nodiscard]] string logfile() const { return sandbox_ + ".log"; }
+
     [[nodiscard]] bool running() const { return running_; }
 
     const map<string, std::shared_ptr<Node>>& nodes();
@@ -144,6 +152,9 @@ private:
     std::unordered_map<string, vector<string>> adjacencylist_;
     vector<string> ordered_;
 
+#ifdef _WIN32
+    vector<HANDLE> handles_;
+#else
     pid_t process_group_{};
 
 
@@ -159,6 +170,7 @@ private:
             LERROR << "Process failed (non-zero exit()). " << wpid;
         }
     }
+#endif
 
 
     void sort_visitor_ (const string& v, std::set<string>& visited, std::stack<string>& stacked)

@@ -22,7 +22,7 @@ namespace daisychain {
 using namespace std;
 
 
-FileListNode::FileListNode() : Node()
+FileListNode::FileListNode()
 {
     type_ = DaisyNodeType::DC_FILELIST;
     set_name (DaisyNodeNameByType[type_]);
@@ -33,7 +33,6 @@ bool
 FileListNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 {
     LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << name_;
-    m_debug_wait();
 
     if (isroot_) {
         for (auto& input : inputs) {
@@ -48,7 +47,7 @@ FileListNode::Execute (vector<string>& inputs, const string& sandbox, json& vars
         }
     }
     else {
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     std::ifstream infile (input);
@@ -67,18 +66,18 @@ FileListNode::Execute (vector<string>& inputs, const string& sandbox, json& vars
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
 
         CloseInputs();
     }
 
+    // all processing is done for this node. Send EOF downstream.
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return true;
 } // FileListNode::Execute

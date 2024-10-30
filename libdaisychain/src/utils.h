@@ -22,13 +22,18 @@
 #include <sstream>
 #include <iterator>
 #include <algorithm>
+#include <filesystem>
 #include <random>
-
+#include "utils_win.h"
+#ifndef _WIN32
 #include <unistd.h>
-#include <csignal>
-#include <nlohmann/json.hpp>
+#endif
 
+
+#include <nlohmann/json.hpp>
 using json = nlohmann::ordered_json;
+
+namespace fs = std::filesystem;
 
 
 inline void
@@ -71,7 +76,7 @@ m_split (const std::string& s, const std::string& delims, std::vector<std::strin
 
 
 template <typename C>
-inline std::string
+std::string
 m_join (const C& container, const std::string& delimiter)
 {
     std::ostringstream result;
@@ -92,7 +97,7 @@ m_join (const C& container, const std::string& delimiter)
 
 
 template <typename C, typename F>
-inline std::string
+std::string
 m_join_if (C& container, const std::string& separator, F comp)
 {
     std::ostringstream oss;
@@ -124,23 +129,6 @@ m_split_input (const std::string& input,
     inputs.insert (inputs.begin(), tokens.begin(), tokens.end());
     //inputs.erase (std::remove (inputs.begin(), inputs.end(), ""), inputs.end());
 } // m_split_input
-
-
-// This is for debugging nodes running in child processes.
-inline void
-m_debug_wait (bool dowait = false)
-{
-#ifndef NDEBUG
-    if (dowait) {
-        std::cout << "attach to pid " << getpid() << std::endl;
-
-        while (dowait)
-            ; // set dowait=false in debugger to continue.
-
-        //raise (SIGTRAP);
-    }
-#endif // ifndef NDEBUG
-} // m_debug_wait
 
 
 inline int
@@ -213,4 +201,147 @@ m_gen_uuid()
         ss << std::hex << dis (gen);
 
     return ss.str();
+}
+
+
+#if defined(_WIN32)
+#include <windows.h>
+inline std::string
+m_get_thread_name()
+{
+    PWSTR threadname = nullptr;
+    HRESULT hr = GetThreadDescription (GetCurrentThread(), &threadname);
+    if (FAILED (hr)) {
+        return "noname";
+    }
+    auto name = wchar2string (threadname);
+    LocalFree (threadname); // Free the allocated memory
+
+    return name;
+}
+#elif defined(__linux__) || defined(__APPLE__)
+inline std::string
+m_get_thread_name()
+{
+    char name[16]; // Maximum 16 characters, as per pthread_setname_np limits
+    int result = pthread_getname_np (pthread_self(), name, sizeof (name));
+    if (result != 0) {
+        return "noname";
+    }
+    return std::string (name);
+}
+#endif
+
+
+#if defined(_WIN32)
+#include <windows.h>
+inline void
+m_set_thread_name (const std::string& name)
+{
+    HRESULT hr = SetThreadDescription (GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str());
+    if (FAILED (hr)) {
+        std::cerr << "Failed to set thread description" << std::endl;
+    }
+}
+#elif defined(__linux__) || defined(__APPLE__)
+#include <pthread.h>
+inline void
+m_set_thread_name (const std::string& name)
+{
+    pthread_setname_np(pthread_self(), name.c_str());
+}
+#else
+inline void
+m_set_thread_name (const std::string& name)
+{
+    // No-op on unsupported platforms
+}
+#endif
+
+
+inline std::string
+m_get_thread_id()
+{
+    std::ostringstream oss;
+    oss << std::this_thread::get_id();
+    return oss.str();
+}
+
+
+// This is for debugging nodes running in child processes.
+inline void
+m_debug_wait (bool dowait = false)
+{
+    if (dowait) {
+#ifdef _WIN32
+        std::cout << "attach to thread id " << m_get_thread_id() << std::endl;
+#else
+        std::cout << "attach to pid " << getpid() << std::endl;
+#endif
+
+        while (dowait)
+            ; // set dowait=false in debugger to continue.
+
+        //raise (SIGTRAP);
+    }
+} // m_debug_wait
+
+
+
+// Function to get the common root folder between two file paths
+inline fs::path
+m_common_root (const fs::path &path1, const fs::path &path2) {
+    auto it1 = path1.begin();
+    auto it2 = path2.begin();
+
+    fs::path common;
+
+    while (it1 != path1.end() && it2 != path2.end() && *it1 == *it2) {
+        common /= *it1;
+        ++it1;
+        ++it2;
+    }
+
+    return common;
+}
+
+
+// Function to find the minimum set of root folders that cover all paths
+inline std::vector<fs::path>
+m_minimum_root (const std::vector<fs::path> &paths) {
+    if (paths.empty()) return {};
+
+    if (paths.size() == 1) {
+        if (fs::is_directory (paths[0])) {
+            return {paths[0]};
+        }
+        return {paths[0].parent_path()};
+    }
+
+    std::vector<fs::path> rootFolders;
+    std::vector<bool> used (paths.size(), false);
+
+    // Loop through all paths to group them by common roots
+    for (size_t i = 0; i < paths.size(); ++i) {
+        if (used[i]) continue;  // Skip if already part of a group
+
+        fs::path commonRootFolder = paths[i];
+        used[i] = true;
+
+        // Compare with other paths and group them based on common root
+        for (size_t j = i + 1; j < paths.size(); ++j) {
+            if (!used[j]) {
+                fs::path newCommonRoot = m_common_root (commonRootFolder, paths[j]);
+                if (!newCommonRoot.empty()) {
+                    commonRootFolder = newCommonRoot;
+                    used[j] = true;  // Mark path as processed
+                }
+            }
+        }
+
+        // Add the found common root folder to the result set
+        rootFolders.push_back (commonRootFolder);
+    }
+
+    return rootFolders;
 }

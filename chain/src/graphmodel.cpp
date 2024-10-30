@@ -21,6 +21,7 @@
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QTextEdit>
 #include <utility>
+#include <fstream>
 
 
 
@@ -31,9 +32,12 @@ GraphModel::GraphModel (std::shared_ptr<QtNodes::NodeDelegateModelRegistry> regi
 {
     graph_ = std::make_shared<daisychain::Graph>();
     graph_->PrepareFileSystem();
-    graphlog_ = graph_->sandbox() + ".log";
+    graphlog_ = graph_->logfile();
 
-    if (::creat (graphlog_.c_str(), 0644) == -1) {
+    if (std::ofstream log_ (graphlog_.c_str()); log_) {
+        log_.close();
+    }
+    else {
         LERROR << "Could not open logfile for reading/writing: " << graphlog_;
     }
 
@@ -179,8 +183,10 @@ GraphModel::updateDaisyNode (NodeDelegateModel* datamodel)
     }
     else if (datamodel->name() == "Watch") {
         bool passthru = datamodel->embeddedWidget()->findChild<QCheckBox*> ("_passthruChk")->isChecked();
+        bool recursive = datamodel->embeddedWidget()->findChild<QCheckBox*> ("_recursiveChk")->isChecked();
         const auto& watchnode = dynamic_cast<WatchNode*> (daisynode.get());
         watchnode->set_passthru (passthru);
+        watchnode->set_recursive (recursive);
     }
 } // GraphModel::updateDaisyNode
 
@@ -225,6 +231,8 @@ GraphModel::connectDaisyNode (const ConnectionId& connection)
 
     if (!connected) {
         auto deleted = deleteConnection (connection);
+        LWARN << "Connection failed: " << o_node->id() << " -> " << i_node->id();
+        LERROR_IF (!deleted) << "Unable to disconnect node in UI.";
     }
 } // GraphModel::connectDaisyNode
 
@@ -347,7 +355,7 @@ GraphModel::emitAll()
 int
 GraphModel::createNodeFromNode (const std::shared_ptr<daisychain::Node>& node)
 {
-    NodeId qtnode;
+    NodeId qtnode{};
     ChainModel* datamodel = nullptr;
 
     auto xy = node->position();
@@ -422,10 +430,12 @@ GraphModel::createNodeFromNode (const std::shared_ptr<daisychain::Node>& node)
         const auto& watchnode = dynamic_cast<WatchNode*> (node.get());
         const QString name = QString::fromStdString (watchnode->name());
         auto passthru = watchnode->passthru();
+        auto recursive = watchnode->recursive();
 
         datamodel = delegateModel<ChainModel>(qtnode);
         datamodel->setNodeName (name);
         datamodel->embeddedWidget()->findChild<QCheckBox*> ("_passthruChk")->setChecked (passthru);
+        datamodel->embeddedWidget()->findChild<QCheckBox*> ("_recursiveChk")->setChecked (recursive);
     } break;
     case daisychain::DC_INVALID:
         return -1;

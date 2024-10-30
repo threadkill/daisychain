@@ -22,13 +22,6 @@
 #include "chainmodel.h"
 
 
-using QtNodes::NodeData;
-using QtNodes::NodeDelegateModel;
-using QtNodes::PortIndex;
-using QtNodes::PortType;
-
-/// The model dictates the number of inputs and outputs for the Node.
-/// In this example it has no logic.
 class CommandModel : public ChainModel
 {
     Q_OBJECT

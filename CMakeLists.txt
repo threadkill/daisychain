@@ -5,10 +5,22 @@ cmake_policy (SET CMP0063 NEW)
 cmake_policy (SET CMP0127 NEW)
 
 set (CMAKE_CXX_STANDARD 20)
+set (DAISYCHAIN_VERSION 1.0.0)
+message (STATUS "DAISYCHAIN_VERSION: ${DAISYCHAIN_VERSION}")
+
+add_compile_definitions (DAISYCHAIN_VERSION="${DAISYCHAIN_VERSION}")
 add_compile_definitions (ELPP_THREAD_SAFE=1)
 add_compile_definitions (ELPP_FRESH_LOG_FILE=1)
 add_compile_definitions (ELPP_FEATURE_PERFORMANCE_TRACKING=1)
+if (WIN32)
+add_compile_definitions (ELPP_DEFAULT_LOG_FILE="c:\\tmp\\daisy.log")
+add_compile_definitions (_CRT_SECURE_NO_WARNINGS=1)
+    if (MSVC)
+        add_compile_options (/MP)
+    endif()
+else()
 add_compile_definitions (ELPP_DEFAULT_LOG_FILE="/var/tmp/daisy.log")
+endif()
 
 include_directories (
     3rdparty/easyloggingpp/src

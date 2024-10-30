@@ -3,6 +3,7 @@
     <qresource>
         <file>daisy_alpha.png</file>
         <file>daisy_alpha_24.png</file>
+        <file>daisy_alpha_big.png</file>
         <file>folder.svg</file>
         <file>MesloLGS NF Bold.ttf</file>
         <file>MesloLGS NF Bold Italic.ttf</file>

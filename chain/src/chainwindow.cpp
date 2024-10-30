@@ -420,8 +420,8 @@ ChainWindow::setupUI()
         auto notes = widget->serialize();
         model_->updateNotes (notes);
     });
-    connect (envwidget, &EnvironWidget::environWidgetChanged, [&](json& data) {
-        model_->updateEnviron (data);
+    connect (envwidget, &EnvironWidget::environWidgetChanged, [&](json& data_) {
+        model_->updateEnviron (data_);
     });
 
     el::Helpers::installLogDispatchCallback<LogFilter>("LogFilter");
@@ -485,11 +485,11 @@ ChainWindow::updateSignals()
     connect (model_.get(), &GraphModel::environUpdated, envwidget, &EnvironWidget::populateUI);
     connect (model_.get(), &GraphModel::finished, this, &ChainWindow::finished);
 
-    connect (model_.get(), &GraphModel::notesUpdated, [&](const json& data) {
+    connect (model_.get(), &GraphModel::notesUpdated, [&](const json& data_) {
         auto widget = findChild<ChainNotes*> ("noteswidget");
         widget->clear();
-        if (data.contains ("text")) {
-            widget->setPlainText (QString::fromStdString (data["text"]));
+        if (data_.contains ("text")) {
+            widget->setPlainText (QString::fromStdString (data_["text"]));
         }
     });
 
@@ -721,7 +721,7 @@ ChainWindow::showGraph (bool compact)
         testbtn->setVisible (true);
         resizeDocks ({browserdock}, {sidewidth_}, Qt::Horizontal);
         resizeDocks ({loggerdock}, {bottomheight_}, Qt::Vertical);
-        resizeDocks ({loggerdock, notesdock}, {100, 50}, Qt::Horizontal);
+        resizeDocks ({loggerdock, notesdock}, {1000, 300}, Qt::Horizontal);
         fitInView();
     }
 
@@ -965,6 +965,9 @@ ChainWindow::closeEvent (QCloseEvent* event)
     else {
         event->ignore();
     }
+
+    trayicon_->setVisible (false);
+    trayicon_->deleteLater();
 } // ChainWindow::closeEvent
 
 
@@ -987,6 +990,6 @@ ChainWindow::test()
 void
 ChainWindow::finished()
 {
-    auto result = QMessageBox::information (this, tr ("Daisy"), tr ("Finished."), QMessageBox::Ok);
+    QMessageBox::information (this, tr ("Daisy"), tr ("Finished."), QMessageBox::Ok);
     switchTab (tabs_->currentIndex());
 } // ChainWindow::finished

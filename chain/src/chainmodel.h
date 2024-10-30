@@ -72,9 +72,9 @@ public:
 
     void setInData (std::shared_ptr<NodeData>, PortIndex const) override {}
 
-    void setId (const std::string& id) { _id = id; }
+    void setId (const std::string& id) { id_ = id; }
 
-    const std::string& id() { return _id; } // id
+    const std::string& id() { return id_; } // id
 
 Q_SIGNALS:
 
@@ -85,7 +85,7 @@ protected Q_SLOTS:
     void onChanged();
 
 protected:
-    std::string _id;
+    std::string id_;
     QString _nodename;
     QWidget* _widget;
     QVBoxLayout* _layout;

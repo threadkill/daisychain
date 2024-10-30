@@ -21,7 +21,7 @@ namespace daisychain {
 using namespace std;
 
 
-DistroNode::DistroNode() : Node()
+DistroNode::DistroNode()
 {
     type_ = DaisyNodeType::DC_DISTRO;
     set_name (DaisyNodeNameByType[type_]);
@@ -47,7 +47,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         }
     }
     else {
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     OpenNextOutput (sandbox);
@@ -61,9 +61,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
 
         CloseInputs();
@@ -73,6 +71,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return true;
 } // DistroNode::Execute
@@ -81,6 +80,7 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 void
 DistroNode::OpenNextOutput (const string& sandbox)
 {
+#ifndef _WIN32
     if (output_it_ == outputs_.end()) {
         output_it_ = outputs_.begin();
     }
@@ -98,8 +98,120 @@ DistroNode::OpenNextOutput (const string& sandbox)
     }
 
     fd_out_[fifo] = fd;
+#endif
 } // DistroNode::OpenNextOutput
 
+
+void
+DistroNode::CloseNextOutput()
+{
+#ifndef _WIN32
+    int stat = close (fd_out_[*output_it_]);
+
+    if (stat == -1) {
+        LERROR << LOGNODE << "Cannot close output file descriptor: " << *output_it_;
+    }
+
+    ++output_it_;
+#endif
+} // DistroNode::CloseNextOutput
+
+
+#ifdef _WIN32
+void
+DistroNode::WriteNextOutput (const string& output)
+{
+    std::string token = output + '\n';
+
+    if (output_it_ == outputs_.end()) {
+        output_it_ = outputs_.begin();
+    }
+
+    HANDLE handle = fd_out_[*output_it_];
+    OVERLAPPED& overlapped_write = overlapped_writes_[std::distance (outputs_.begin(), output_it_)];
+
+    DWORD wrote = 0;
+    size_t written = 0;
+
+    while (written < token.size() && !terminate_.load()) {
+        BOOL fSuccess = WriteFile(
+            handle,
+            token.data() + written,
+            static_cast<DWORD>(token.size() - written),
+            &wrote,
+            &overlapped_write
+        );
+
+        if (!fSuccess) {
+            DWORD error = GetLastError();
+            if (error == ERROR_IO_PENDING) {
+                // Wait for the write operation to complete or for the terminate event
+                HANDLE events[] = { overlapped_write.hEvent, terminate_event_ };
+                DWORD wait_result = WaitForMultipleObjects(2, events, FALSE, INFINITE);
+
+                if (wait_result == WAIT_OBJECT_0 + 1) {  // Termination event signaled
+                    LDEBUG << LOGNODE << "Termination event signaled, exiting WriteNextOutput.";
+                    return;
+                }
+
+                BOOL overlapped_result = GetOverlappedResult (handle, &overlapped_write, &wrote, TRUE);
+                if (!overlapped_result) {
+                    DWORD overlapped_error = GetLastError();
+                    LERROR << LOGNODE << "GetOverlappedResult failed with error: " << overlapped_error;
+                    return;
+                }
+            }
+            else if (error == ERROR_BROKEN_PIPE) {
+                LERROR << LOGNODE << "Broken pipe for handle: " << handle;
+                return;
+            }
+            else {
+                LERROR << LOGNODE << "WriteFile failed with error: " << error;
+                return;
+            }
+        }
+
+        written += wrote;
+        totalbyteswritten_ += wrote;
+        ResetEvent (overlapped_write.hEvent);
+    }
+
+    FlushFileBuffers (handle);
+    ++output_it_;
+} // DistroNode::WriteNextOutput
+
+
+
+void
+DistroNode::WriteAnyOutput (const string& output)
+{
+    string token = output + '\n';
+    BOOL ret = false;
+    OVERLAPPED overlapped = { 0 };
+    overlapped.hEvent = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+
+    for (const auto& [path, handle] : fd_out_) {
+        DWORD numbytes = 0;
+        auto tokensize = static_cast<DWORD>(token.size());
+        do {
+            ret = WriteFile (handle, token.c_str(), tokensize, &numbytes, &overlapped);
+
+            if (!ret && GetLastError() == ERROR_IO_PENDING) {
+                break;
+            }
+
+            if (numbytes) {
+                token = output.substr (numbytes) + '\n';
+            }
+        } while (numbytes < tokensize && !terminate_.load());
+
+        if (numbytes == tokensize) {
+            return;
+        }
+    }
+} // DistroNode::WriteAnyOutput
+
+#else
 
 void
 DistroNode::WriteNextOutput (const string& output)
@@ -188,19 +300,5 @@ DistroNode::WriteAnyOutput (const string& output)
         }
     }
 } // DistroNode::WriteAnyOutput
-
-
-void
-DistroNode::CloseNextOutput()
-{
-    int stat = close (fd_out_[*output_it_]);
-
-    if (stat == -1) {
-        LERROR << LOGNODE << "Cannot close output file descriptor: " << *output_it_;
-    }
-
-    output_it_++;
-} // DistroNode::CloseNextOutput
-
-
+#endif
 } // namespace daisychain

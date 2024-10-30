@@ -21,7 +21,8 @@ namespace daisychain {
 using namespace std;
 
 
-RemoteNode::RemoteNode() : Node() { Init_(); }
+RemoteNode::RemoteNode()
+{ Init_(); }
 
 
 bool

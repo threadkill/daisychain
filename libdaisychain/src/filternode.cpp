@@ -15,7 +15,12 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "filternode.h"
+#ifdef _WIN32
+#include <shlwapi.h>
+#pragma comment(lib, "Shlwapi.lib")
+#else
 #include <fnmatch.h>
+#endif
 #include <regex>
 #include <utility>
 
@@ -30,7 +35,6 @@ using namespace std;
 
 
 FilterNode::FilterNode() :
-    Node(),
     regex_ (false), invert_ (false)
 {
     type_ = DaisyNodeType::DC_FILTER;
@@ -39,10 +43,9 @@ FilterNode::FilterNode() :
 
 
 FilterNode::FilterNode (string filter, bool is_regex = false, bool negate = false) :
-    Node(),
-    filter_ (std::move (filter)),
     regex_ (is_regex),
-    invert_ (negate)
+    invert_ (negate),
+    filter_ (std::move (filter))
 {
     type_ = DaisyNodeType::DC_FILTER;
     set_name (DaisyNodeNameByType[type_]);
@@ -89,25 +92,35 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     }
 
     if (isroot_) {
+        LDEBUG << "Root: " << name_;
+
         for (auto& input : inputs) {
             bool match = false;
 
             if (regex_) {
                 match = std::regex_match (input, expr);
             }
+#ifdef _WIN32
+            else if (PathMatchSpec (input.c_str(), filter_.c_str())) {
+#else
             else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
+#endif
                 match = true;
             }
 
-            if ((match && !invert_) || (!match && invert_)) {
+            if (match ^ invert_) {
+                LDEBUG << "Matched: " << input;
                 OpenOutputs (sandbox);
                 WriteOutputs (input);
                 CloseOutputs();
             }
+            else {
+                LDEBUG << "No Match." << input;
+            }
         }
     }
     else {
-        while (eofs_ <= fd_in_.size()) {
+        while (eofs_ <= fd_in_.size() && !terminate_.load()) {
             for (auto& input : inputs) {
                 if (input != "EOF") {
                     bool match = false;
@@ -115,15 +128,22 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                     if (regex_) {
                         match = std::regex_match (input, expr);
                     }
-                    else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH)
-                             == 0) {
+#ifdef _WIN32
+                    else if (PathMatchSpec (input.c_str(), filter_.c_str())) {
+#else
+                    else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
+#endif
                         match = true;
                     }
 
-                    if ((match && !invert_) || (!match && invert_)) {
+                    if (match ^ invert_) {
+                        LDEBUG << "Matched: " << input;
                         OpenOutputs (sandbox);
                         WriteOutputs (input);
                         CloseOutputs();
+                    }
+                    else {
+                        LDEBUG << "No Match." << input;
                     }
                 }
             }
@@ -133,11 +153,8 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            else {
-                ReadInputs (inputs);
-            }
+            ReadInputs (inputs);
         }
-
         CloseInputs();
     }
 
@@ -146,6 +163,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     WriteOutputs ("EOF");
     CloseOutputs();
     Stats();
+    Reset();
 
     return true;
 } // FilterNode::Execute

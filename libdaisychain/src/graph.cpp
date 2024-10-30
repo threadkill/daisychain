@@ -14,10 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#include "graph.h"
-#include <ftw.h>
 #include <iomanip>
 #include <sys/stat.h>
+#include "graph.h"
+#ifdef _WIN32
+#include <windows.h>
+#include <tchar.h>
+#include <semaphore>
+#include "utils_win.h"
+#else
+#include <ftw.h>
+#include <cerrno>
+#endif
 
 
 namespace daisychain {
@@ -54,7 +62,9 @@ Graph::Initialize (const string& filename)
     edges_.clear();
     ordered_.clear();
     adjacencylist_.clear();
+#ifndef _WIN32
     process_group_ = 0;
+#endif
 
     if (!filename_.empty()) {
         LINFO <<  "Initializing graph from file: " << filename_;
@@ -189,6 +199,24 @@ Graph::PrepareFileSystem()
     bool status = true;
     struct stat ss{};
 
+#ifdef _WIN32
+    if (sandbox_.empty()) {
+        char temp[] = "daisy-XXXXXX";
+        sandbox_ = mkdtemp_ (temp);
+
+        if (sandbox_.empty()) {
+            LERROR << "Temp directory creation failed.";
+            status = false;
+        }
+    }
+    else if (stat (sandbox_.c_str(), &ss) != 0) {
+        if (auto ret = CreateDirectory (sandbox_.c_str(), nullptr); !ret) {
+            LERROR << "Cannot create directory: " + sandbox_;
+            status = false;
+        }
+    }
+
+#else
     if (sandbox_.empty()) {
         char temp[] = "/tmp/daisy-XXXXXX";
         sandbox_ = mkdtemp (temp);
@@ -221,6 +249,7 @@ Graph::PrepareFileSystem()
             }
         }
     }
+#endif
 
     return status;
 } // Graph::PrepareFileSystem
@@ -243,8 +272,8 @@ Graph::Execute (const string& input)
 bool
 Graph::Execute (const string& input, json& env)
 {
-    TIMED_FUNC (timerObj);
-    setbuf (stdout, nullptr);
+    TIMED_SCOPE (timerObj, "Graph::Execute()");
+    //setbuf (stdout, nullptr);
 
     if (!PrepareFileSystem()) {
         return false;
@@ -261,9 +290,37 @@ Graph::Execute (const string& input, json& env)
 
     sort_();
 
-    process_group_ = 0;
     running_ = true;
 
+#ifdef _WIN32
+    // Process leader for the group.
+    LDEBUG << "Order of execution:";
+    for (const auto& uuid : ordered_) {
+        LDEBUG << uuid << " - " << nodes_[uuid]->name();
+    }
+
+    Node::nodes_ready.clear();
+    Node::nodecount = 0;
+
+    for (const auto& uuid : ordered_) {
+        auto node_ = nodes_[uuid];
+        if (node_->is_root()) {
+            // root nodes receive initial input.
+            LDEBUG << "Root node: " << node_->name();
+            auto log = logfile();
+            node_->Start (inputs, sandbox_, merged_env, log);
+        }
+        else {
+            auto log = logfile();
+            node_->Start (sandbox_, merged_env, log);
+        }
+    }
+
+    for (const auto& uuid : ordered_) {
+        nodes_[uuid]->Join();
+    }
+#else
+    process_group_ = 0;
     pid_t group_pid = fork();
 
     if (group_pid == 0) {
@@ -272,6 +329,7 @@ Graph::Execute (const string& input, json& env)
         for (const auto& uuid : ordered_) {
             LDEBUG << uuid << " - " << nodes_[uuid]->name();
         }
+
         for (const auto& uuid : ordered_) {
 
             // Create child processes in a loop.
@@ -327,10 +385,11 @@ Graph::Execute (const string& input, json& env)
 
     // Waiting on first fork.
     wait_ (group_pid);
+    process_group_ = 0;
+#endif
     LINFO_IF (!test_) << "Graph execution finished.";
     LINFO_IF (test_) << "Graph test finished.";
 
-    process_group_ = 0;
     running_ = false;
 
     return true;
@@ -358,6 +417,13 @@ Graph::Test()
 void
 Graph::Terminate()
 {
+#ifdef _WIN32
+    for (const auto& [name, node] : nodes_) {
+        node->Stop();
+    }
+
+    running_ = false;
+#else
     if (!process_group_ && !running_)
         return;
 
@@ -386,6 +452,7 @@ Graph::Terminate()
             break;
         }
     }
+#endif
 }
 
 
@@ -396,6 +463,10 @@ Graph::Cleanup()
         return true;
     }
 
+#ifdef _WIN32
+    int status = DeleteDirectoryRecursively (sandbox_);
+    status == 0 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
+#else
     auto rmdirtree = [] (const char* path, const struct stat* buf, int type, struct FTW* ftwb) {
         int stat = std::remove (path);
         stat < 0 ? LERROR << "Could not remove: " << path : LDEBUG << "Removed: " << path;
@@ -405,6 +476,7 @@ Graph::Cleanup()
 
     int status = nftw (sandbox_.c_str(), rmdirtree, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
     status == 0 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
+#endif
 
     return status == 0;
 }
