@@ -1,24 +1,25 @@
 name: macOS-latest Qt6 Build
 
 on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
-  
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to use for the release"
+        required: true
+        default: "macos-latest"  # Default tag
+
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
-  build:
+  build-and-release:
     runs-on: macos-latest
 
     steps:
-      # Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}  # Checkout the specified tag
 
       # Install dependencies (Homebrew and Qt6)
       - name: Install Homebrew
@@ -33,7 +34,7 @@ jobs:
           echo "$(brew --prefix qt@6)/lib" >> $GITHUB_PATH
           echo "$(brew --prefix qt@6)/include" >> $GITHUB_PATH
 
-      # Configure the build (Assuming CMake project)
+      # Configure the build
       - name: Configure CMake
         run: |
           mkdir build
@@ -52,49 +53,13 @@ jobs:
           cd build
           cmake --install .
 
-      # Upload build artifacts
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: daisychain-macos-latest-build
-          path: /tmp/DaisyChain.dmg
+      - name: Rename Executable with Tag Version
+        run: mv /tmp/DaisyChain.dmg /tmp/DaisyChain-${{ github.event.inputs.tag }}.dmg
 
-      # Overwrite 'macos-latest' tag
-      - name: Delete existing release and tag
-        run: |
-          release_id=$(curl -s \
-            -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            "https://api.github.com/repos/${{ github.repository }}/releases/tags/macos-latest" | jq -r .id)
-          
-          if [ "$release_id" != "null" ]; then
-            echo "Deleting release with id: $release_id"
-            curl -X DELETE \
-              -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-              "https://api.github.com/repos/${{ github.repository }}/releases/$release_id"
-          
-            echo "Deleting tag: macos-latest"
-            git push origin --delete macos-latest
-          fi
-
-      # Create release
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
         with:
-          tag_name: macos-latest
-          release_name: Latest Artifacts
-          draft: false
-          prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Upload release
-      - name: Upload Artifact to Release
-        uses: actions/upload-release-asset@v1
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: /tmp/DaisyChain.dmg
-          asset_name: DaisyChain.dmg
-          asset_content_type: application/x-apple-diskimage
+          tag_name: ${{ github.event.inputs.tag }}
+          files: /tmp/DaisyChain-${{ github.event.inputs.tag }}.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
