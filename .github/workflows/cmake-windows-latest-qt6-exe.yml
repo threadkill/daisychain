@@ -43,6 +43,13 @@ jobs:
           VERSION=${GITHUB_REF#refs/tags/}
           mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-${VERSION}-win64.exe
 
+      - name: Upload Artifact for Debugging (optional)
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: Build-Output
+          path: build/
+
   release:
     needs: build-windows
     runs-on: windows-latest
