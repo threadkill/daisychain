@@ -47,23 +47,23 @@ process in a GUI application which does not require terminal interaction by user
 
 ## How?<a id='how'></a>
 
-DaisyChain uses a directed-acyclic-graph (DAG) to control the order of operations. Nodes in the graph read inputs, do some processing, and then write the outputs. Inputs are typically file paths but could be any string token (e.g. a range of numbers). A node will execute a process once per token until all tokens have been received. Tokens can be modified as they pass through the graph.
+DaisyChain uses a directed-acyclic-graph (DAG) to control the order of operations. Nodes in the graph read inputs, do some processing, and then write the outputs. Inputs are typically file paths but could be any string token (e.g. a range of numbers). A node will execute once per token until all tokens have been received. Some nodes can wait and process all tokens at once. Token strings can be modified as they pass through the graph.
 
-Every node runs as a child process (*via fork()*). All synchronization between nodes is handled using named pipes and multiplexed I/O. This allows processes to run in parallel.
+Each node runs as a child process. All synchronization between nodes is handled using named pipes and multiplexed I/O. This allows processes to run in parallel.
 
-Graphs are stored as JSON in a *.dcg file.
+Graphs are stored as JSON in a *.dcg file that encapsulates all the commands and parameters (but not the inputs).
 
 The current set of executable nodes includes:
 
 * __CommandLine__ - executes external programs via shell environment.
 * __Filter__ - provides string matching via globbing or regular expressions.
 * __Concat__ - concatenates multiple inputs into a single output.
-* __Distro__ - distributes data across multiple outputs.
-* __FileList__ - converts a text file into input.
-* __Watch__ - polls for changes to directories/files.
+* __Distro__ - distributes tokens across multiple outputs in round-robin fashion, skipping busy outputs.
+* __FileList__ - converts a text file into input line-by-line.
+* __Watch__ - polls for changes to directories/files and writes the modified filenames to the outputs.
 
 __Options__ are passed to nodes via variables that can be set in the __Variables__ panel in
-the GUI or set using flags from the command-line tool.
+the GUI or set using flags from the command-line tool. These are effectively environment variables.
 
 __Processing__ happens one string token at a time. Nodes loop over tokens and execute once per token. This behavior can be changed by checking the __`batch`__ checkbox (*when a node supports it*); in which case, a node will __block__ until it has received all inputs which are then concatenated into one large string and set as the input for the node.
 
@@ -78,14 +78,14 @@ substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Add
 
 ## Downloads
 
-The only automated builds currently available are for macOS. [macOS-13+(arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain.dmg) 
- and [macOS-12 (x86_64)](https://github.com/threadkill/daisychain/releases/download/macos-12/DaisyChain.dmg)
+Automated builds are currently available for Windows10+ and macOS: [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe), [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg) 
+ and [macOS-12 (x86_64)](https://github.com/threadkill/daisychain/releases/download/macos-12-latest/DaisyChain.dmg)
 
 <br/> 
 
 ## Building<a id='building'></a>
 
-The project was primarily developed for __macOS__ and __Linux__.
+The project was originally developed for __macOS__ and __Linux__ but was ported to __Windows__ more recently. The Linux and macOS implementation uses fork()'s, while Windows uses threads.
 
 It is possible to build on __Windows 10/11__ using __WSL2__ (*e.g. Debian*) but very limited testing has been done. For best performance, make sure all working files are located on the Linux file system (e.g. *NOT* `/mnt/c`). At a minimum, these packages are needed: `git`, `gcc`, `cmake`, `qt6`, `qt6-base-dev`, `qt6-base-dev-tools`, `python3-dev`, `libxkbcommon-dev`.
 
@@ -117,12 +117,12 @@ GUI Dependencies:
 1. ```git clone git@github.com:threadkill/daisychain.git```
 2. ```cd daisychain && git submodule update --init --recursive```
 3. ```mkdir build && cd build```
-4. ```cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=<install dir>```
-5. ```make -j5 install```
+4. ```cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=<install dir> -DCMAKE_PREFIX_PATH=<Qt6_Root>/<arch>```
+5. ```cmake --build . --target install -j```
 
 	*individual build targets:* __*daisy, chain, libdaisychain, pydaisychain*__
 
-#### Autotools
+#### Autotools (macOS and Linux)
 
 *The configure scripts currently only support building the library (__libdaisychain__) and the command-line application (__daisy__). When building the GUI application (chain) or the python bindings (pydaisychain), use the CMake buildscripts.*
 
@@ -138,7 +138,6 @@ GUI Dependencies:
 ##### *Notes*
 
 * *There are no run-time dependencies for `libdaisychain` or `daisy`; all dependencies are header-only.*
-* *If Qt6 is not found, set `CMAKE_PREFIX_PATH` on the CMake command-line to the root of your Qt6 installation (e.g. ```-DCMAKE_PREFIX_PATH=<Qt6_Root>/<arch>```).*
 * *Qt6 is not linked to by the commandline tool `daisy` and does not need to be present on a server or headless environment.*
 * *[NodeEditor](https://github.com/paceholder/nodeeditor) is used to create nodes and establish connections. Data flow functionality is not used.*
 
@@ -146,7 +145,7 @@ GUI Dependencies:
 
 ## Development<a id='development'></a>
 
-#### Debugging
+#### Debugging (macOS and Linux)
 Debugging forked processes can be challenging and typically requires a debugger that can follow forks. The graph uses an
 initial fork to establish the process leader for the group and subsequent forks for each node in the graph. This is how tasks
 are parallelized and facilitates signal processing via process group.
@@ -160,7 +159,7 @@ node name to be sure you're in the exact node you're trying to debug.
 ##### Example
 
 ```c++
-    if (name_ == "Command1")
+    if (name_ == "MyCommand1")
         m_debug_wait(true);
 ```
 
