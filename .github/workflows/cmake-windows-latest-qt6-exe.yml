@@ -1,0 +1,68 @@
+name: Windows Qt6 Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to use for the release"
+        required: true
+        default: "win-latest"  # Using the valid tag "win-latest"
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.inputs.tag }}  # Checkout the specified tag
+
+      - name: Set up Qt
+        uses: jurplel/install-qt-action@v3
+        with:
+          version: '6.7.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2019_64
+
+      - name: Configure CMake
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.7.2\msvc2019_64 -DCMAKE_INSTALL_PREFIX=C:\Temp\DaisyChain -DBUILD_PYTHON_MODULE=OFF
+
+      - name: Build and Install
+        run: cmake --build build --target install --config Release -- /m
+
+      - name: Package with CPack
+        run: cmake --build build --target run_cpack --config Release -j
+
+      - name: Rename Executable with Tag Version
+        run: |
+          mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
+
+      - name: Upload Executable Artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: Build-Executable
+          path: build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
+
+  release:
+    needs: build-windows
+    runs-on: windows-latest
+
+    steps:
+      - name: Download Executable Artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: Build-Executable
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.event.inputs.tag }}  # Use the specified tag
+          files: build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
