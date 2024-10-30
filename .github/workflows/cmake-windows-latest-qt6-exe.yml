@@ -1,4 +1,4 @@
-name: Build Qt6 Windows Installer
+name: Windows Qt6 Build
 
 on:
   workflow_dispatch:  # Allows manual trigger from GitHub UI
