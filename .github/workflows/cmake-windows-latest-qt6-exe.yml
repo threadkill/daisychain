@@ -29,7 +29,7 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.7.2\msvc2019_64 -DCMAKE_INSTALL_PREFIX=C:\Temp\DaisyChain
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.7.2\msvc2019_64 -DCMAKE_INSTALL_PREFIX=C:\Temp\DaisyChain -DBUILD_PYTHON_MODULE=OFF
 
       - name: Build and Install
         run: cmake --build build --target install --config Release -- /m
