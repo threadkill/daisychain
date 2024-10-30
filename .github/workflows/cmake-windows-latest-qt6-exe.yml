@@ -1,14 +1,14 @@
 name: Windows Qt6 Build
 
 on:
-  workflow_dispatch:  # Allows manual trigger from GitHub UI
+  workflow_dispatch:
     inputs:
       tag:
         description: "Tag to use for the release"
         required: true
-        default: "win-latest"
+        default: "win-latest"  # Using the valid tag "win-latest"
+
 env:
-  # Customize the CMake build type here (Release, Debug, RelWithDebInfo, etc.)
   BUILD_TYPE: Release
 
 jobs:
@@ -40,33 +40,29 @@ jobs:
         run: cmake --build build --target run_cpack --config Release -j
 
       - name: Rename Executable with Tag Version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-latest-win64.exe
+          mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
 
-      - name: Upload Artifact for Debugging (optional)
-        if: success()
+      - name: Upload Executable Artifact
         uses: actions/upload-artifact@v3
         with:
-          name: Build-Output
-          path: build/
+          name: Build-Executable
+          path: build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
 
   release:
     needs: build-windows
     runs-on: windows-latest
-    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
-      - name: Download Build Artifact
+      - name: Download Executable Artifact
         uses: actions/download-artifact@v3
         with:
-          name: Build-Output
+          name: Build-Executable
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.tag }}  # Use the specified tag
-          files: build/DaisyChain-latest-win64.exe
+          files: build/DaisyChain-${{ github.event.inputs.tag }}-win64.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
