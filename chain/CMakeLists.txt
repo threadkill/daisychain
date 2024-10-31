@@ -35,25 +35,45 @@ include_directories (
 set (chain_SOURCES
     resources/chainresources.qrc
     src/chain.cpp
-    src/chainnotes.cpp
+    src/chain.h
     src/chainbrowser.cpp
+    src/chainbrowser.h
+    src/chainfonts.h
     src/chainmodel.cpp
+    src/chainmodel.h
+    src/chainnotes.cpp
+    src/chainnotes.h
+    src/chainreaddata.h
     src/chainscene.cpp
+    src/chainscene.h
+    src/chainstyles.h
     src/chainview.cpp
+    src/chainview.h
     src/chainwindow.cpp
+    src/chainwindow.h
+    src/chainwritedata.h
     src/commandmodel.cpp
+    src/commandmodel.h
     src/concatmodel.cpp
+    src/concatmodel.h
     src/distromodel.cpp
-    src/filelistmodel.cpp
-    src/watchmodel.cpp
+    src/distromodel.h
     src/environwidget.cpp
+    src/environwidget.h
+    src/filelistmodel.cpp
+    src/filelistmodel.h
     src/filtermodel.cpp
-    src/logwidget.cpp
-    src/loghighlighter.cpp
+    src/filtermodel.h
     src/graphmodel.cpp
     src/graphmodel.h
     src/logfilter.cpp
     src/logfilter.h
+    src/loghighlighter.cpp
+    src/loghighlighter.h
+    src/logwidget.cpp
+    src/logwidget.h
+    src/watchmodel.cpp
+    src/watchmodel.h
 )
 
 # macOS specific configurations
@@ -94,6 +114,7 @@ if (APPLE)
                 -always-overwrite -dmg
             WORKING_DIRECTORY ${CMAKE_INSTALL_PREFIX})"
     )
+
 # Windows specific configurations
 elseif (WIN32)
     find_program (Qt6_TOOL_PATH
@@ -116,7 +137,7 @@ elseif (WIN32)
     qt_disable_unicode_defines (chain)
     set (WINDEPLOYQT_TMP "${CMAKE_BINARY_DIR}/windeployqt_tmp")
 
-    # Install the executable and run windeployqt
+    # Install the executable and run windeployqt to bundle Qt6
     install (TARGETS chain DESTINATION .)
     install (
         CODE "
@@ -127,7 +148,7 @@ elseif (WIN32)
     install (DIRECTORY "${WINDEPLOYQT_TMP}/" DESTINATION .)
     install (FILES "${CMAKE_SOURCE_DIR}/COPYING" DESTINATION . RENAME license.txt)
 
-    # CPack configuration for packaging
+    # CPack configuration for packaging the *.exe installer
     include (InstallRequiredSystemLibraries)
     set (CPACK_PACKAGE_NAME "DaisyChain")
     set (CPACK_PACKAGE_VERSION ${DAISYCHAIN_VERSION})
@@ -162,6 +183,8 @@ elseif (WIN32)
         target_compile_options (QtNodes INTERFACE /W3)
         target_link_options (chain PRIVATE /IGNORE:4217 /IGNORE:4286)
     endif()
+
+# Linux et al
 else()
     add_executable (chain ${chain_SOURCES})
     install (TARGETS chain DESTINATION .)
