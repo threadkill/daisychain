@@ -1,6 +1,5 @@
 [![Windows Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-windows-latest-qt6-exe.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/win-latest)
 [![macOS-latest Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/macos-latest)
-[![macOS-12 Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-12-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/macos-12-latest)
 
 # Daisy![picture](chain/resources/daisy_alpha_24.png)Chain
 
@@ -78,8 +77,7 @@ substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Add
 
 ## Downloads
 
-Automated builds are currently available for Windows10+ and macOS: [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe), [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg) 
- and [macOS-12 (x86_64)](https://github.com/threadkill/daisychain/releases/download/macos-12-latest/DaisyChain.dmg)
+Binaries are currently available for Windows10+ and macOS: [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe) and  [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg) 
 
 <br/> 
 
