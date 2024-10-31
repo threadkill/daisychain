@@ -224,7 +224,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     char pbuff[8192] = {};
 
-    while (!feof (fp)) {
+    while (!feof (fp) && !terminate_.load()) {
         if (fgets (pbuff, 8192, fp) != nullptr) {
             std_out += pbuff;
         }

@@ -793,7 +793,7 @@ public:
         events.push_back (terminate_event_);
 
         // Loop until all writes are complete or the termination event is signaled
-        while (true) {
+        while (!terminate_.load()) {
             DWORD waitResult = WaitForMultipleObjects(
                 static_cast<DWORD>(events.size()),  // Number of events
                 events.data(),                      // Array of event handles

@@ -99,7 +99,7 @@ ChainView::dropEvent (QDropEvent* event)
 
         for (const auto& url : urls) {
             if (url.toLocalFile().endsWith (".dcg")) {
-                graph = url.path();
+                graph = url.toLocalFile();
             }
             else {
                 auto path = url.toLocalFile().toStdString();
