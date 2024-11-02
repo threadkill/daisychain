@@ -77,7 +77,7 @@ substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Add
 
 ## Downloads
 
-Binaries are currently available for Windows10+ and macOS: [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe) and  [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg) 
+Binaries are currently available for [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe) and  [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg).
 
 <br/> 
 
