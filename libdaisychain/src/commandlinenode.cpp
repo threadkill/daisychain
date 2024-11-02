@@ -159,6 +159,7 @@ CommandLineNode::command()
 bool
 CommandLineNode::run_command (const string& input, const string& sandbox)
 {
+    //setbuf (stdout, nullptr);
     bool stat = false;
     bool use_std_out = false;
     string std_out;

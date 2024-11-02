@@ -50,6 +50,12 @@ public:
         stopwatching_ = false;
         watch_handle_map_.clear();  // only directories can be watched on windows
         watch_files_.clear();       // explicitly watched files
+        dirinfos_.clear();
+        terminate_.store (false);
+
+        while (!modified_files_.empty()) {
+            modified_files_.pop();
+        }
 #endif
         eofs_ = 0;
         totalbytesread_ = 0;

@@ -525,8 +525,13 @@ public:
             }
         }
 
-       terminate_event_ = CreateEvent (nullptr, TRUE, FALSE, nullptr);
-       read_events_.push_back (terminate_event_);
+        terminate_event_ = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+        if (terminate_event_ == nullptr || terminate_event_ == INVALID_HANDLE_VALUE) {
+            LERROR << LOGNODE << "Failed to create event. Error: " << GetLastError();
+            return;
+        }
+
+        read_events_.push_back (terminate_event_);
 
         {
             std::unique_lock lock (close_mutex_);
@@ -569,6 +574,7 @@ public:
             CloseHandle (handle);
         }
 
+        // The terminate_event_ HANDLE is the last element in read_events_
         for (const auto& handle : read_events_) {
             CloseHandle (handle);
         }
@@ -577,10 +583,7 @@ public:
             CloseHandle (handle);
         }
 
-        ResetEvent (terminate_event_);
-        //CloseHandle (terminate_event_);
         terminate_event_ = nullptr;
-
         fd_in_.clear();
         fd_out_.clear();
         read_events_.clear();

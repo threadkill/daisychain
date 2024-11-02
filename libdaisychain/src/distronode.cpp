@@ -61,7 +61,10 @@ DistroNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
             if (eofs_ == fd_in_.size()) {
                 break;
             }
-            ReadInputs (inputs);
+            if (ReadInputs (inputs) == -1) {
+                eofs_ = fd_in_.size();
+                break;
+            }
         }
 
         CloseInputs();

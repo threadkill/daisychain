@@ -653,7 +653,7 @@ WatchNode::MonitorThread()
                 continue; // Timeout reached, check for termination
             }
             LERROR << "GetQueuedCompletionStatusEx failed with error: " << error;
-            continue;
+            break;
         }
 
         std::vector<std::string> batch_modified_files;
@@ -741,7 +741,7 @@ WatchNode::MonitorThread()
                 }
 
                 offset += notify->NextEntryOffset;
-            } while (notify->NextEntryOffset != 0);
+            } while (notify->NextEntryOffset != 0 && !terminate_.load());
         }
 
         if (!batch_modified_files.empty()) {
@@ -783,14 +783,19 @@ WatchNode::Monitor (const string& sandbox)
         thread_handles.push_back (hThread);
     }
 
-    while (!stopwatching_) {
+    while (!stopwatching_ && !terminate_.load()) {
         std::unique_lock lock (modified_mutex_);
 
         modified_cv_.wait (lock, [this] {
             return !modified_files_.empty() || stopwatching_;
         });
 
-        if (stopwatching_) {break;}
+        if (stopwatching_ || terminate_.load()) {
+            lock.unlock();
+            WriteOutputs ("EOF");
+            lock.lock();
+            break;
+        }
 
         if (!modified_files_.empty()) {
             auto filename = modified_files_.front();
@@ -813,22 +818,27 @@ WatchNode::Monitor (const string& sandbox)
         CloseHandle (hThread);
     }
 
-    CloseHandle (iocp_);
+    RemoveWatches();
 
     for (auto dirinfo : dirinfos_) {
-        CloseHandle (dirinfo->hDir);
+        if (dirinfo->hDir != nullptr && dirinfo->hDir != INVALID_HANDLE_VALUE) {
+            CloseHandle (dirinfo->hDir);
+        }
+        dirinfo->hDir = nullptr;
         delete dirinfo;
     }
+
+    dirinfos_.clear();
 } // WatchNode::Monitor
 
 
 void
 WatchNode::RemoveWatches()
 {
-    if (iocp_ != nullptr) {
-        //CloseHandle (iocp_);
-        iocp_ = nullptr;
+    if (iocp_ != nullptr && iocp_ != INVALID_HANDLE_VALUE) {
+        CloseHandle (iocp_);
     }
+    iocp_ = nullptr;
 
     LDEBUG << "Removed watched file descriptors.";
 } // WatchNode::RemoveWatches
