@@ -25,7 +25,7 @@ namespace daisychain {
 class WatchNode final : public Node
 {
 public:
-    explicit WatchNode (Graph*);
+    WatchNode();
 
     ~WatchNode() override;
 
@@ -106,9 +106,9 @@ private:
         return 0;
     }
 
-    HANDLE iocp_{};                         // IO Completion Port HANDLE
-    map<string, HANDLE> watch_handle_map_;  // only directories can be watched on windows
-    std::vector<fs::path> watch_files_;     // explicitly watched files
+    HANDLE iocp_{}; // IO Completion Port HANDLE
+    map<string, HANDLE> watch_handle_map_;
+    std::vector<fs::path> watch_files_;
     std::mutex modified_mutex_;
     std::mutex terminate_mutex_;
     std::condition_variable modified_cv_;

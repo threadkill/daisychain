@@ -109,7 +109,7 @@ PYBIND11_MODULE (pydaisychain, m) {
         ;
 
     py::class_<Node, PyNode, std::shared_ptr<Node>> (m, "Node")
-        .def (py::init<Graph*>())
+        .def (py::init<>())
         .def ("Initialize", &Node::Initialize)
         .def ("Serialize", &Node::Serialize)
         .def ("Execute", py::overload_cast<const string&, json&> (&Node::Execute))
@@ -150,8 +150,8 @@ PYBIND11_MODULE (pydaisychain, m) {
         ;
 
     py::class_<CommandLineNode, Node, std::shared_ptr<CommandLineNode>> (m, "CommandLineNode")
-        .def (py::init<Graph*>())
-        .def (py::init<Graph*, const string&>())
+        .def (py::init<>())
+        .def (py::init<const string&>())
         .def ("Execute", py::overload_cast<vector<string>&, const string&, json&> (&CommandLineNode::Execute))
         .def ("Initialize", &CommandLineNode::Initialize)
         .def ("Serialize", &CommandLineNode::Serialize)
@@ -160,8 +160,8 @@ PYBIND11_MODULE (pydaisychain, m) {
         ;
 
     py::class_<FilterNode, Node, std::shared_ptr<FilterNode>> (m, "FilterNode")
-        .def (py::init<Graph*>())
-        .def (py::init<Graph*, string, bool, bool>())
+        .def (py::init<>())
+        .def (py::init<string, bool, bool>())
         .def ("Execute", py::overload_cast<vector<string>&, const string&, json&> (&FilterNode::Execute))
         .def ("Initialize", &FilterNode::Initialize)
         .def ("Serialize", &FilterNode::Serialize)
@@ -174,22 +174,22 @@ PYBIND11_MODULE (pydaisychain, m) {
         ;
 
     py::class_<ConcatNode, Node, std::shared_ptr<ConcatNode>> (m, "ConcatNode")
-        .def (py::init<Graph*>())
+        .def (py::init<>())
         .def ("Execute", py::overload_cast<vector<string>&, const string&, json&> (&ConcatNode::Execute))
         ;
 
     py::class_<DistroNode, Node, std::shared_ptr<DistroNode>> (m, "DistroNode")
-        .def (py::init<Graph*>())
+        .def (py::init<>())
         .def ("Execute", py::overload_cast<vector<string>&, const string&, json&> (&DistroNode::Execute))
         ;
 
     py::class_<FileListNode, Node, std::shared_ptr<FileListNode>> (m, "FileListNode")
-        .def (py::init<Graph*>())
+        .def (py::init<>())
         .def ("Execute", py::overload_cast<vector<string>&, const string&, json&> (&FileListNode::Execute))
         ;
 
     py::class_<WatchNode, Node, std::shared_ptr<WatchNode>> (m, "WatchNode")
-        .def (py::init<Graph*>())
+        .def (py::init<>())
         .def ("Execute", py::overload_cast<vector<string>&, const string&, json&> (&WatchNode::Execute))
         .def ("Initialize", &WatchNode::Initialize)
         .def ("Serialize", &WatchNode::Serialize)

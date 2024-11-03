@@ -22,8 +22,7 @@ namespace daisychain {
 using namespace std;
 
 
-FileListNode::FileListNode (Graph* parent) :
-    Node (parent)
+FileListNode::FileListNode()
 {
     type_ = DaisyNodeType::DC_FILELIST;
     set_name (DaisyNodeNameByType[type_]);

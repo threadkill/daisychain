@@ -83,13 +83,11 @@ public:
 
     void Terminate();
 
-    void CloseHandles();
-
     bool Cleanup();
 
     void Print();
 
-    std::shared_ptr<Node> CreateNode (json& data, bool keep_uuid);
+    static std::shared_ptr<Node> CreateNode (json& data, bool keep_uuid);
 
     bool AddNode (const std::shared_ptr<Node>& node);
 
@@ -136,15 +134,6 @@ public:
     const map<string, std::shared_ptr<Node>>& nodes();
 
     const list<Edge>& edges();
-
-protected:
-    std::mutex sync_mutex_;
-    std::mutex close_mutex_;
-    std::condition_variable sync_cv_;
-    std::condition_variable close_cv_;
-    std::map<std::string, bool> nodes_ready;
-    std::atomic<int> nodecount{0};
-    friend class Node;
 
 private:
     string filename_;

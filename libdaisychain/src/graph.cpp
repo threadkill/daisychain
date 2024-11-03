@@ -292,14 +292,13 @@ Graph::Execute (const string& input, json& env)
     running_ = true;
 
 #ifdef _WIN32
+    auto context = new NodeThreadContext();
+
     // Process leader for the group.
     LDEBUG << "Order of execution:";
     for (const auto& uuid : ordered_) {
         LDEBUG << uuid << " - " << nodes_[uuid]->name();
     }
-
-    nodes_ready.clear();
-    nodecount = 0;
 
     for (const auto& uuid : ordered_) {
         auto node_ = nodes_[uuid];
@@ -307,17 +306,19 @@ Graph::Execute (const string& input, json& env)
             // root nodes receive initial input.
             LDEBUG << "Root node: " << node_->name();
             auto log = logfile();
-            node_->Start (inputs, sandbox_, merged_env, log);
+            node_->Start (context, inputs, sandbox_, merged_env, log);
         }
         else {
             auto log = logfile();
-            node_->Start (sandbox_, merged_env, log);
+            node_->Start (context, sandbox_, merged_env, log);
         }
     }
 
     for (const auto& uuid : ordered_) {
         nodes_[uuid]->Join();
     }
+
+    delete context;
 #else
     process_group_ = 0;
     pid_t group_pid = fork();
@@ -499,22 +500,22 @@ Graph::CreateNode (json& keydata, bool keep_uuid)
 
     switch (type_) {
         case DC_COMMANDLINE:
-            node = std::make_shared<CommandLineNode>(this);
+            node = std::make_shared<CommandLineNode>();
             break;
         case DC_FILTER:
-            node = std::make_shared<FilterNode>(this);
+            node = std::make_shared<FilterNode>();
             break;
         case DC_CONCAT:
-            node = std::make_shared<ConcatNode>(this);
+            node = std::make_shared<ConcatNode>();
             break;
         case DC_DISTRO:
-            node = std::make_shared<DistroNode>(this);
+            node = std::make_shared<DistroNode>();
             break;
         case DC_FILELIST:
-            node = std::make_shared<FileListNode>(this);
+            node = std::make_shared<FileListNode>();
             break;
         case DC_WATCH:
-            node = std::make_shared<WatchNode>(this);
+            node = std::make_shared<WatchNode>();
             break;
         default:
             LERROR << "Unknown type." << jit.value()["type"];

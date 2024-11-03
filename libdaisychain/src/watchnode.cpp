@@ -24,8 +24,7 @@ using namespace std;
 using namespace filesystem;
 
 
-WatchNode::WatchNode (Graph* parent) :
-    Node (parent),
+WatchNode::WatchNode() :
     passthru_ (false),
     recursive_ (true)
 {

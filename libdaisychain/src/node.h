@@ -27,9 +27,6 @@ using namespace std;
 using json = nlohmann::ordered_json;
 
 
-class Graph;
-
-
 enum DaisyNodeType : short {
     DC_INVALID = -1,
     DC_COMMANDLINE,
@@ -65,10 +62,23 @@ NLOHMANN_JSON_SERIALIZE_ENUM
 })
 
 
+#ifdef _WIN32
+struct NodeThreadContext
+{
+    std::mutex sync_mutex_;
+    std::mutex close_mutex_;
+    std::condition_variable sync_cv_;
+    std::condition_variable close_cv_;
+    std::atomic<int> nodecount{0};
+    std::map<std::string, bool> nodes_ready;
+};
+#endif
+
+
 class Node
 {
 public:
-    explicit Node (Graph*);
+    Node();
 
     virtual ~Node();
 
@@ -77,9 +87,9 @@ public:
     virtual json Serialize();
 
 #ifdef _WIN32
-    void Start (const string&, json&, const string&);
+    void Start (NodeThreadContext*, const string&, json&, const string&);
 
-    void Start (vector<string>&, const string&, json&, const string&);
+    void Start (NodeThreadContext*, vector<string>&, const string&, json&, const string&);
 
     void Join();
 
@@ -175,7 +185,6 @@ public:
 
 
 protected:
-    Graph* graph{};
     string id_;
     string name_;
     std::pair<float, float> position_;
@@ -207,6 +216,7 @@ protected:
     map<const string, HANDLE> fd_in_;
     map<const string, HANDLE> fd_out_;
     std::thread thread_;
+    NodeThreadContext* context_{};
 #else
     map<const string, int> fd_in_;
     map<const string, int> fd_out_;

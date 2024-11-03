@@ -21,21 +21,11 @@ namespace daisychain {
 using namespace std;
 
 
-RemoteNode::RemoteNode (Graph* parent) :
-    Node (parent)
-{
-    Init_();
-}
-
-
-bool
-RemoteNode::Init_()
+RemoteNode::RemoteNode()
 {
     type_ = DaisyNodeType::DC_REMOTE;
     set_host_id ("");
-
-    return true;
-} // RemoteNode::Initialize_
+}
 
 
 bool

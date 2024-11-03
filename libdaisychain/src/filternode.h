@@ -23,9 +23,9 @@ namespace daisychain {
 class FilterNode final : public Node
 {
 public:
-    explicit FilterNode (Graph*);
+    FilterNode();
 
-    FilterNode (Graph*, string filter, bool is_regex, bool negate);
+    FilterNode (string filter, bool is_regex, bool negate);
 
     void Initialize (json&, bool) override;
 

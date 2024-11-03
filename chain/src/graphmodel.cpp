@@ -84,32 +84,32 @@ GraphModel::addDaisyNode (const NodeId& node)
     std::string uid;
 
     if (datamodel->name() == "Shell Command") {
-        auto cmdnode = std::make_shared<CommandLineNode>(graph_.get());
+        auto cmdnode = std::make_shared<CommandLineNode>();
         uid = cmdnode->id();
         graph_->AddNode (cmdnode);
     }
     else if (datamodel->name() == "Filter") {
-        auto fltnode = std::make_shared<FilterNode>(graph_.get());
+        auto fltnode = std::make_shared<FilterNode>();
         uid = fltnode->id();
         graph_->AddNode (fltnode);
     }
     else if (datamodel->name() == "Concat") {
-        auto catnode = std::make_shared<ConcatNode>(graph_.get());
+        auto catnode = std::make_shared<ConcatNode>();
         uid = catnode->id();
         graph_->AddNode (catnode);
     }
     else if (datamodel->name() == "Distro") {
-        auto distronode = std::make_shared<DistroNode>(graph_.get());
+        auto distronode = std::make_shared<DistroNode>();
         uid = distronode->id();
         graph_->AddNode (distronode);
     }
     else if (datamodel->name() == "FileList") {
-        auto filelistnode = std::make_shared<FileListNode>(graph_.get());
+        auto filelistnode = std::make_shared<FileListNode>();
         uid = filelistnode->id();
         graph_->AddNode (filelistnode);
     }
     else if (datamodel->name() == "Watch") {
-        auto watchnode = std::make_shared<WatchNode>(graph_.get());
+        auto watchnode = std::make_shared<WatchNode>();
         uid = watchnode->id();
         graph_->AddNode (watchnode);
     }

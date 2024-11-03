@@ -44,8 +44,7 @@ using namespace std;
 using json = nlohmann::ordered_json;
 
 
-Node::Node (Graph* parent) :
-    graph (parent),
+Node::Node () :
     id_ (m_gen_uuid()),
     position_ (std::pair<float, float> (0.0f, 0.0f)),
     size_ (std::pair<int, int> (0, 0)),
@@ -111,8 +110,9 @@ Node::Serialize()
 
 #ifdef _WIN32
 void
-Node::Start (const string& sandbox, json& vars, const string& threadname)
+Node::Start (NodeThreadContext* ctx, const string& sandbox, json& vars, const string& threadname)
 {
+    context_ = ctx;
     thread_ = std::thread ([this, &sandbox, &vars, threadname]() {
         el::Helpers::setThreadName (threadname);
         this->OpenWindowsPipes (sandbox);
@@ -125,8 +125,9 @@ Node::Start (const string& sandbox, json& vars, const string& threadname)
 
 
 void
-Node::Start (vector<string>& inputs, const string& sandbox, json& vars, const string& threadname)
+Node::Start (NodeThreadContext* ctx, vector<string>& inputs, const string& sandbox, json& vars, const string& threadname)
 {
+    context_ = ctx;
     thread_ = std::thread ([this, &inputs, &sandbox, &vars, threadname]() {
         el::Helpers::setThreadName (threadname);
         this->OpenWindowsPipes (sandbox);
@@ -397,7 +398,7 @@ Node::OpenWindowsPipes (const string& sandbox_)
     const std::set uniq_inputs (inputs_.begin(), inputs_.end());
 
     {
-        std::unique_lock lock (graph->sync_mutex_);
+        std::unique_lock lock (context_->sync_mutex_);
 
         for (const auto& fifo : uniq_outputs) {
             auto pipename = get_pipename (sandbox_, fifo);
@@ -420,8 +421,8 @@ Node::OpenWindowsPipes (const string& sandbox_)
             fd_out_[fifo] = hwrite;
         }
 
-        graph->nodes_ready[id_] = true;
-        graph->sync_cv_.notify_all();
+        context_->nodes_ready[id_] = true;
+        context_->sync_cv_.notify_all();
     }
 
     for (const auto& fifo : uniq_outputs) {
@@ -445,11 +446,11 @@ Node::OpenWindowsPipes (const string& sandbox_)
         auto pipename = get_pipename (sandbox_, fifo);
 
         {
-            std::unique_lock lock (graph->sync_mutex_);
+            std::unique_lock lock (context_->sync_mutex_);
             vector<string> tokens;
             m_split (fifo, ".", tokens);
             string parentname = tokens[0];
-            graph->sync_cv_.wait (lock, [&]() { return graph->nodes_ready[parentname]; });
+            context_->sync_cv_.wait (lock, [&]() { return context_->nodes_ready[parentname]; });
         }
 
         while (!terminate_.load()) {
@@ -506,8 +507,8 @@ Node::OpenWindowsPipes (const string& sandbox_)
     read_events_.push_back (terminate_event_);
 
     {
-        std::unique_lock lock (graph->close_mutex_);
-        ++graph->nodecount;
+        std::unique_lock lock (context_->close_mutex_);
+        ++context_->nodecount;
     }
 } // OpenPipes
 
@@ -516,14 +517,14 @@ void
 Node::CloseWindowsPipes()
 {
     {
-        std::unique_lock lock (graph->close_mutex_);
-        --graph->nodecount;
+        std::unique_lock lock (context_->close_mutex_);
+        --context_->nodecount;
 
-        if (graph->nodecount == 0) {
-            graph->close_cv_.notify_all();
+        if (context_->nodecount == 0) {
+            context_->close_cv_.notify_all();
         }
         else {
-            graph->close_cv_.wait(lock, [&] { return graph->nodecount == 0; });
+            context_->close_cv_.wait(lock, [&] { return context_->nodecount == 0; });
         }
     }
 
@@ -591,7 +592,7 @@ Node::ReadInputs(std::vector<std::string>& inputs)
     }
 
     // Wait for any of the named pipes to signal they have data
-    DWORD waitResult = WaitForMultipleObjects(
+    const DWORD waitResult = WaitForMultipleObjects(
         static_cast<DWORD>(read_events_.size()),  // Number of events
         read_events_.data(),                      // Array of event handles
         FALSE,                                    // Wait for any event
@@ -606,12 +607,11 @@ Node::ReadInputs(std::vector<std::string>& inputs)
     if (waitResult == WAIT_OBJECT_0 + read_events_.size() - 1) {
         LDEBUG << LOGNODE << "Termination event signaled.";
         ResetEvent (terminate_event_);
-        return -1;  // Exit the thread
+        return -1;
     }
 
-    // Calculate the index of the pipe that has data
     DWORD index = waitResult - WAIT_OBJECT_0;
-    if (index < 0 || index >= pipeinfos_.size()) {
+    if (index >= pipeinfos_.size()) {
         LERROR << LOGNODE << "Invalid index.";
         return -1;
     }

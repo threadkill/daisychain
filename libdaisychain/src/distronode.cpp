@@ -21,8 +21,7 @@ namespace daisychain {
 using namespace std;
 
 
-DistroNode::DistroNode (Graph* parent) :
-    Node (parent)
+DistroNode::DistroNode()
 {
     type_ = DaisyNodeType::DC_DISTRO;
     set_name (DaisyNodeNameByType[type_]);

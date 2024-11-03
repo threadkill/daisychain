@@ -23,9 +23,9 @@ namespace daisychain {
 class CommandLineNode final : public Node
 {
 public:
-    explicit CommandLineNode (Graph*);
+    CommandLineNode();
 
-    CommandLineNode (Graph*, string);
+    CommandLineNode (string);
 
     void Initialize (json&, bool) override;
 

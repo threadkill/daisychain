@@ -34,8 +34,7 @@ namespace daisychain {
 using namespace std;
 
 
-FilterNode::FilterNode (Graph* parent) :
-    Node (parent),
+FilterNode::FilterNode() :
     regex_ (false),
     invert_ (false)
 {
@@ -44,8 +43,7 @@ FilterNode::FilterNode (Graph* parent) :
 }
 
 
-FilterNode::FilterNode (Graph* parent, string filter, bool is_regex = false, bool negate = false) :
-    Node (parent),
+FilterNode::FilterNode (string filter, bool is_regex = false, bool negate = false) :
     regex_ (is_regex),
     invert_ (negate),
     filter_ (std::move (filter))
