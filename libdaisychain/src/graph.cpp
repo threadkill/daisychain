@@ -497,32 +497,32 @@ Graph::CreateNode (json& keydata, bool keep_uuid)
 
     auto type_ = jit.value()["type"].get<DaisyNodeType>();
 
-    if (type_ == DaisyNodeType::DC_COMMANDLINE) {
-        node = std::make_shared<CommandLineNode>(this);
-        node->Initialize (keydata, keep_uuid);
+    switch (type_) {
+        case DC_COMMANDLINE:
+            node = std::make_shared<CommandLineNode>(this);
+            break;
+        case DC_FILTER:
+            node = std::make_shared<FilterNode>(this);
+            break;
+        case DC_CONCAT:
+            node = std::make_shared<ConcatNode>(this);
+            break;
+        case DC_DISTRO:
+            node = std::make_shared<DistroNode>(this);
+            break;
+        case DC_FILELIST:
+            node = std::make_shared<FileListNode>(this);
+            break;
+        case DC_WATCH:
+            node = std::make_shared<WatchNode>(this);
+            break;
+        default:
+            LERROR << "Unknown type." << jit.value()["type"];
+            break;
     }
-    else if (type_ == DaisyNodeType::DC_FILTER) {
-        node = std::make_shared<FilterNode>(this);
+
+    if (node != nullptr) {
         node->Initialize (keydata, keep_uuid);
-    }
-    else if (type_ == DaisyNodeType::DC_CONCAT) {
-        node = std::make_shared<ConcatNode>(this);
-        node->Initialize (keydata, keep_uuid);
-    }
-    else if (type_ == DaisyNodeType::DC_DISTRO) {
-        node = std::make_shared<DistroNode>(this);
-        node->Initialize (keydata, keep_uuid);
-    }
-    else if (type_ == DaisyNodeType::DC_FILELIST) {
-        node = std::make_shared<FileListNode>(this);
-        node->Initialize (keydata, keep_uuid);
-    }
-    else if (type_ == DaisyNodeType::DC_WATCH) {
-        node = std::make_shared<WatchNode>(this);
-        node->Initialize (keydata, keep_uuid);
-    }
-    else {
-        LERROR << "Unknown type." << jit.value()["type"];
     }
 
     return node;
