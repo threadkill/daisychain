@@ -25,7 +25,7 @@ namespace daisychain {
 class WatchNode : public Node
 {
 public:
-    WatchNode();
+    WatchNode (Graph*);
 
     ~WatchNode() override;
 

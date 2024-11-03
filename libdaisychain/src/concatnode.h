@@ -23,7 +23,7 @@ namespace daisychain {
 class ConcatNode : public Node
 {
 public:
-    ConcatNode();
+    ConcatNode (Graph*);
 
     bool Execute (vector<string>& input, const string& sandbox, json& vars) override;
 };

@@ -23,7 +23,7 @@ namespace daisychain {
 class FileListNode : public Node
 {
 public:
-    FileListNode();
+    FileListNode (Graph*);
 
     bool Execute (vector<string>& input, const string& sandbox, json& vars) override;
 

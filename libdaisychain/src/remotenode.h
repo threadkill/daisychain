@@ -23,7 +23,7 @@ namespace daisychain {
 class RemoteNode : public Node
 {
 public:
-    RemoteNode();
+    RemoteNode (Graph*);
 
     bool Execute (const string& sandbox);
 

@@ -89,7 +89,7 @@ public:
 
     void Print();
 
-    static std::shared_ptr<Node> CreateNode (json& data, bool keep_uuid);
+    std::shared_ptr<Node> CreateNode (json& data, bool keep_uuid);
 
     bool AddNode (const std::shared_ptr<Node>& node);
 
@@ -137,6 +137,15 @@ public:
 
     const list<Edge>& edges();
 
+protected:
+    std::mutex sync_mutex_;
+    std::mutex close_mutex_;
+    std::condition_variable sync_cv_;
+    std::condition_variable close_cv_;
+    std::map<std::string, bool> nodes_ready;
+    std::atomic<int> nodecount{0};
+    friend class Node;
+
 private:
     string filename_;
     string sandbox_;
@@ -152,9 +161,7 @@ private:
     std::unordered_map<string, vector<string>> adjacencylist_;
     vector<string> ordered_;
 
-#ifdef _WIN32
-    vector<HANDLE> handles_;
-#else
+#ifndef _WIN32
     pid_t process_group_{};
 
 
@@ -171,7 +178,6 @@ private:
         }
     }
 #endif
-
 
     void sort_visitor_ (const string& v, std::set<string>& visited, std::stack<string>& stacked)
     {

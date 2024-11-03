@@ -13,6 +13,7 @@ set (libdaisychain_SOURCES
     src/logger.h
     src/logger.cpp
     src/node.h
+    src/node.cpp
     src/commandlinenode.h
     src/commandlinenode.cpp
     src/concatnode.h

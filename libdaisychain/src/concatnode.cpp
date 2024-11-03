@@ -22,7 +22,8 @@ namespace daisychain {
 using namespace std;
 
 
-ConcatNode::ConcatNode()
+ConcatNode::ConcatNode (Graph* parent) :
+    Node (parent)
 {
     type_ = DaisyNodeType::DC_CONCAT;
     set_name (DaisyNodeNameByType[type_]);

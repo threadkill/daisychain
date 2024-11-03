@@ -298,8 +298,8 @@ Graph::Execute (const string& input, json& env)
         LDEBUG << uuid << " - " << nodes_[uuid]->name();
     }
 
-    Node::nodes_ready.clear();
-    Node::nodecount = 0;
+    nodes_ready.clear();
+    nodecount = 0;
 
     for (const auto& uuid : ordered_) {
         auto node_ = nodes_[uuid];
@@ -498,27 +498,27 @@ Graph::CreateNode (json& keydata, bool keep_uuid)
     auto type_ = jit.value()["type"].get<DaisyNodeType>();
 
     if (type_ == DaisyNodeType::DC_COMMANDLINE) {
-        node = std::make_shared<CommandLineNode>();
+        node = std::make_shared<CommandLineNode>(this);
         node->Initialize (keydata, keep_uuid);
     }
     else if (type_ == DaisyNodeType::DC_FILTER) {
-        node = std::make_shared<FilterNode>();
+        node = std::make_shared<FilterNode>(this);
         node->Initialize (keydata, keep_uuid);
     }
     else if (type_ == DaisyNodeType::DC_CONCAT) {
-        node = std::make_shared<ConcatNode>();
+        node = std::make_shared<ConcatNode>(this);
         node->Initialize (keydata, keep_uuid);
     }
     else if (type_ == DaisyNodeType::DC_DISTRO) {
-        node = std::make_shared<DistroNode>();
+        node = std::make_shared<DistroNode>(this);
         node->Initialize (keydata, keep_uuid);
     }
     else if (type_ == DaisyNodeType::DC_FILELIST) {
-        node = std::make_shared<FileListNode>();
+        node = std::make_shared<FileListNode>(this);
         node->Initialize (keydata, keep_uuid);
     }
     else if (type_ == DaisyNodeType::DC_WATCH) {
-        node = std::make_shared<WatchNode>();
+        node = std::make_shared<WatchNode>(this);
         node->Initialize (keydata, keep_uuid);
     }
     else {

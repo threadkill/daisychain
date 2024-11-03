@@ -23,7 +23,7 @@ namespace daisychain {
 class DistroNode : public Node
 {
 public:
-    DistroNode();
+    DistroNode (Graph*);
 
     bool Execute (vector<string>& input, const string& sandbox, json& vars) override;
 

@@ -21,8 +21,11 @@ namespace daisychain {
 using namespace std;
 
 
-RemoteNode::RemoteNode()
-{ Init_(); }
+RemoteNode::RemoteNode (Graph* parent) :
+    Node (parent)
+{
+    Init_();
+}
 
 
 bool

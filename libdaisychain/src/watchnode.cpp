@@ -24,7 +24,8 @@ using namespace std;
 using namespace filesystem;
 
 
-WatchNode::WatchNode() :
+WatchNode::WatchNode (Graph* parent) :
+    Node (parent),
     passthru_ (false),
     recursive_ (true)
 {
@@ -526,21 +527,19 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         }
     }
 
-    if (stat) {
-        if (!test_) {
-            if (!inputs.empty() && inputs[inputs.size() - 1] == "EOF") {
-                inputs.pop_back();
-            }
-
-            Monitor (sandbox);
+    if (!test_) {
+        if (!inputs.empty() && inputs[inputs.size() - 1] == "EOF") {
+            inputs.pop_back();
         }
 
-        RemoveWatches();
-        OpenOutputs (sandbox);
-        WriteOutputs ("EOF");
-        CloseOutputs();
-        Reset();
+        Monitor (sandbox);
     }
+
+    RemoveWatches();
+    OpenOutputs (sandbox);
+    WriteOutputs ("EOF");
+    CloseOutputs();
+    Reset();
 
     return stat;
 } // WatchNode::Execute

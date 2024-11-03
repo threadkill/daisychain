@@ -23,8 +23,8 @@ namespace daisychain {
 class FilterNode : public Node
 {
 public:
-    FilterNode();
-    FilterNode (string filter, bool is_regex, bool negate);
+    FilterNode (Graph*);
+    FilterNode (Graph*, string filter, bool is_regex, bool negate);
 
     void Initialize (json&, bool) override;
 
