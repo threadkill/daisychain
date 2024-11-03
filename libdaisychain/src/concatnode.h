@@ -20,10 +20,10 @@
 
 
 namespace daisychain {
-class ConcatNode : public Node
+class ConcatNode final : public Node
 {
 public:
-    ConcatNode (Graph*);
+    explicit ConcatNode (Graph*);
 
     bool Execute (vector<string>& input, const string& sandbox, json& vars) override;
 };

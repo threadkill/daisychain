@@ -69,6 +69,7 @@ class Node
 {
 public:
     explicit Node (Graph*);
+
     virtual ~Node();
 
     virtual void Initialize (json&, bool);

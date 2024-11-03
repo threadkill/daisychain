@@ -22,10 +22,10 @@
 
 
 namespace daisychain {
-class WatchNode : public Node
+class WatchNode final : public Node
 {
 public:
-    WatchNode (Graph*);
+    explicit WatchNode (Graph*);
 
     ~WatchNode() override;
 
