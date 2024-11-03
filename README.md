@@ -85,7 +85,7 @@ Binaries are currently available for [Windows10+ (x86_64)](https://github.com/th
 
 The project was originally developed for __macOS__ and __Linux__ but was ported to __Windows__ more recently. The Linux and macOS implementation uses fork()'s, while Windows uses threads.
 
-It is possible to build on __Windows 10/11__ using __WSL2__ (*e.g. Debian*) but very limited testing has been done. For best performance, make sure all working files are located on the Linux file system (e.g. *NOT* `/mnt/c`). At a minimum, these packages are needed: `git`, `gcc`, `cmake`, `qt6`, `qt6-base-dev`, `qt6-base-dev-tools`, `python3-dev`, `libxkbcommon-dev`.
+It is possible to build on __Windows 10/11__ using __WSL2__ (*e.g. Debian*) but very limited testing has been done. For best performance, make sure all working files are located on the Linux file system (e.g. *NOT* `/mnt/c`). At a minimum, these packages are needed for WSL2: `git`, `gcc`, `cmake`, `qt6`, `qt6-base-dev`, `qt6-base-dev-tools`, `python3-dev`, `libxkbcommon-dev`.
 
 #### Requirements
 
