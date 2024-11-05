@@ -133,11 +133,12 @@ DeleteDirectoryRecursively (const std::string& directory) {
 
 inline std::string
 wchar2string (const wchar_t* wcharStr) {
-    if (!wcharStr)
+    if (!wcharStr) {
         return {};
+    }
 
     int size_needed = WideCharToMultiByte (CP_UTF8, 0, wcharStr, -1, nullptr, 0, nullptr, nullptr);
-    std::string result (size_needed, 0);
+    std::string result (size_needed - 1, 0);
     WideCharToMultiByte (CP_UTF8, 0, wcharStr, -1, &result[0], size_needed, nullptr, nullptr);
 
     return result;

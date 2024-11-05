@@ -26,7 +26,9 @@ using namespace filesystem;
 
 WatchNode::WatchNode() :
     passthru_ (false),
-    recursive_ (true)
+    recursive_ (false),
+    only_files_ (false),
+    only_dirs_ (false)
 {
 #ifdef _WIN32
     stopwatching_ = false;
@@ -510,19 +512,41 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
     std::vector<path> allpaths (inputs.begin(), inputs.end());
     for (const auto& path: allpaths) {
         if (is_regular_file (path)) {
-            watch_files_.emplace_back (path.string());
+            watch_files_.insert (path.string());
             if (passthru_) {
                 OpenOutputs (sandbox);
                 WriteOutputs (path.string());
                 CloseOutputs();
             }
         }
+        else if (is_directory (path)) {
+            watch_dirs_.emplace (path.string());
+        }
     }
 
-    auto common_folders = m_minimum_root (allpaths);
-    for (auto& folder: common_folders) {
-        if (!Notify (sandbox, folder.string())) {
-            stat = false;
+    // Determine if paths are of a single type (file vs directory)
+    if (watch_dirs_.empty() ^ watch_files_.empty()) {
+        only_files_ = watch_dirs_.empty();
+        only_dirs_ = watch_files_.empty();
+    }
+
+    if (only_files_) {
+        recursive_ = true;
+    }
+
+    if (recursive_) {
+        auto common_folders = m_minimum_root (allpaths);
+        for (auto& folder: common_folders) {
+            if (!Notify (sandbox, folder.string())) {
+                stat = false;
+            }
+        }
+    }
+    else {
+        for (auto& folder: watch_dirs_) {
+            if (!Notify (sandbox, folder)) {
+                stat = false;
+            }
         }
     }
 
@@ -608,7 +632,7 @@ WatchNode::Notify (const string& sandbox, const string& path)
         dirinfo->hDir,
         dirinfo->buffer,
         BUFFER_SIZE,
-        TRUE, // Monitor subdirectories
+        recursive_, // Monitor subdirectories
         FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
         FILE_NOTIFY_CHANGE_SIZE      | FILE_NOTIFY_CHANGE_LAST_WRITE,
         nullptr,
@@ -628,10 +652,12 @@ WatchNode::Notify (const string& sandbox, const string& path)
 } // WatchNode::Notify
 
 
-DWORD WINAPI
+void
 WatchNode::MonitorThread()
 {
     ULONG num_removed = 0;
+
+    el::Helpers::setThreadName (threadname_);
 
     while (!terminate_.load()) {
         OVERLAPPED_ENTRY overlapped[MAXIMUM_WAIT_OBJECTS];
@@ -646,7 +672,7 @@ WatchNode::MonitorThread()
         if (terminate_.load()) break;
 
         if (!success) {
-            DWORD error = GetLastError();
+            const DWORD error = GetLastError();
             if (error == WAIT_TIMEOUT) {
                 continue; // Timeout reached, check for termination
             }
@@ -704,7 +730,7 @@ WatchNode::MonitorThread()
                 switch (notify->Action) {
                     case FILE_ACTION_ADDED:
                         LDEBUG << "File added: ";
-                        transmit = true;
+                        transmit = !only_files_;
                         break;
                     case FILE_ACTION_REMOVED:
                         LDEBUG << "File removed: ";
@@ -718,7 +744,7 @@ WatchNode::MonitorThread()
                         break;
                     case FILE_ACTION_RENAMED_NEW_NAME:
                         LDEBUG << "File renamed (new name): ";
-                        transmit = true;
+                        transmit = !only_files_;
                         break;
                     default:
                         LDEBUG << "Unknown action: ";
@@ -728,6 +754,16 @@ WatchNode::MonitorThread()
                 if (transmit) {
                     std::wstring wfilename (notify->FileName, notify->FileNameLength / sizeof(WCHAR));
                     auto filename = wchar2string (wfilename.c_str());
+
+                    auto fullpath = dirinfo->directoryPath + "/" + filename;
+
+                    if (only_files_) {
+                        if (!watch_files_.contains (fullpath)) {
+                            continue;
+                        }
+                    }
+
+                    LDEBUG << fullpath;
 
                     // Time-based filtering of duplicates
                     auto now = std::chrono::steady_clock::now();
@@ -750,35 +786,20 @@ WatchNode::MonitorThread()
             modified_cv_.notify_one();
         }
     }
-
-    return 0;
 } // WatchNode::MonitorThread
 
 
 void
-WatchNode::Monitor (const string& sandbox)
+WatchNode::Monitor (const std::string& sandbox)
 {
     SYSTEM_INFO sysinfo;
-    GetSystemInfo (&sysinfo);
-    int numthreads = sysinfo.dwNumberOfProcessors;
+    GetSystemInfo(&sysinfo);
+    const auto numthreads = sysinfo.dwNumberOfProcessors;
 
-    std::vector<HANDLE> thread_handles;
+    std::vector<std::thread> threads;
 
-    for (int i = 0; i < numthreads; ++i) {
-        HANDLE hThread = CreateThread(
-            nullptr,
-            0,
-            &WatchNode::ThreadProc,
-            this,
-            0,
-            nullptr);
-
-        if (hThread == nullptr) {
-            std::cerr << "Failed to create worker thread." << std::endl;
-            continue;
-        }
-
-        thread_handles.push_back (hThread);
+    for (unsigned int i = 0; i < numthreads; ++i) {
+        threads.emplace_back (&WatchNode::MonitorThread, this);
     }
 
     while (!stopwatching_ && !terminate_.load()) {
@@ -805,15 +826,14 @@ WatchNode::Monitor (const string& sandbox)
         }
     }
 
-    for (int i = 0; i < numthreads; ++i) {
+    for (unsigned int i = 0; i < numthreads; ++i) {
         PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
     }
 
-    WaitForMultipleObjects(
-        static_cast<DWORD> (thread_handles.size()), thread_handles.data(), TRUE, INFINITE);
-
-    for (HANDLE hThread : thread_handles) {
-        CloseHandle (hThread);
+    for (auto& thread : threads) {
+        if (thread.joinable()) {
+            thread.join();
+        }
     }
 
     RemoveWatches();

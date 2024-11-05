@@ -17,6 +17,7 @@
 #pragma once
 
 #include <queue>
+#include <set>
 #include "node.h"
 #include "utils.h"
 
@@ -90,7 +91,7 @@ private:
     bool recursive_;
 
 #ifdef _WIN32
-    DWORD WINAPI MonitorThread();
+    void MonitorThread();
 
     #define BUFFER_SIZE (1024 * 64)
     struct DirectoryInfo {
@@ -100,15 +101,12 @@ private:
         BYTE buffer[BUFFER_SIZE];
     };
 
-    static DWORD WINAPI ThreadProc (LPVOID lpParameter) {
-        auto* worker = static_cast<WatchNode*>(lpParameter);
-        worker->MonitorThread();
-        return 0;
-    }
-
     HANDLE iocp_{}; // IO Completion Port HANDLE
     map<string, HANDLE> watch_handle_map_;
-    std::vector<fs::path> watch_files_;
+    bool only_files_;
+    bool only_dirs_;
+    std::set<string> watch_files_;
+    std::set<string> watch_dirs_;
     std::mutex modified_mutex_;
     std::mutex terminate_mutex_;
     std::condition_variable modified_cv_;

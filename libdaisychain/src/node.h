@@ -156,6 +156,11 @@ public:
     void set_outputfile (const string& output) { outputfile_ = output; }
     string outputfile() { return outputfile_; }
 
+    void set_threadname (const string& threadname) {
+        threadname_ = threadname;
+        el::Helpers::setThreadName (threadname_);
+    }
+
     int input_index (const string&) const;
 
     std::map<string, vector<unsigned int>> input_indices() const;
@@ -198,6 +203,7 @@ protected:
     list<string> inputs_;
     list<string> outputs_;
     atomic<bool> terminate_;
+    string threadname_;
 
 #ifdef _WIN32
     struct PipeInfo {

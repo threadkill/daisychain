@@ -114,7 +114,7 @@ Node::Start (NodeThreadContext* ctx, const string& sandbox, json& vars, const st
 {
     context_ = ctx;
     thread_ = std::thread ([this, &sandbox, &vars, threadname]() {
-        el::Helpers::setThreadName (threadname);
+        this->set_threadname (threadname);
         this->OpenWindowsPipes (sandbox);
         auto stat = this->Execute (sandbox, vars);
         this->CloseWindowsPipes();
@@ -129,7 +129,7 @@ Node::Start (NodeThreadContext* ctx, vector<string>& inputs, const string& sandb
 {
     context_ = ctx;
     thread_ = std::thread ([this, &inputs, &sandbox, &vars, threadname]() {
-        el::Helpers::setThreadName (threadname);
+        this->set_threadname (threadname);
         this->OpenWindowsPipes (sandbox);
         auto stat = this->Execute (inputs, sandbox, vars);
         this->CloseWindowsPipes();
