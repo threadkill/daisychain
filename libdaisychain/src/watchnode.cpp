@@ -195,7 +195,6 @@ WatchNode::Monitor (const string& sandbox)
 {
     int numevents = -1;
     struct kevent event{};
-    string previous;
 
     // must be stopped with a SIGINT (ctrl-c).
     while (true) {
@@ -205,10 +204,11 @@ WatchNode::Monitor (const string& sandbox)
             continue;
         }
 
-        string path = watch_fd_map_[int(event.ident)];
+        string path = watch_fd_map_[static_cast<int> (event.ident)];
         auto fs_path = filesystem::path (path);
 
-        if (is_directory (fs_path)) {
+        if (is_directory (fs_path) && recursive_) {
+            // New directory notification (add subdirectories to watch)
             std::vector<string> newpaths;
             for (const auto& comp : recursive_directory_iterator (path)) {
                 newpaths.push_back (comp.path());
@@ -227,31 +227,23 @@ WatchNode::Monitor (const string& sandbox)
                 if (!found) {
                     LDEBUG << "New file: " << newpath;
                     Notify (sandbox, newpath);
-                    previous = newpath;
                 }
             }
         }
         else {
+            bool transmit = false;
+
             if (event.fflags & NOTE_WRITE) {
                 LDEBUG << "Written: " << path;
-                if (path != previous) {
-                    OpenOutputs (sandbox);
-                    WriteOutputs (path);
-                    CloseOutputs();
-                }
-                else {
-                    previous.clear();
-                }
+                transmit = true;
             }
             else if (event.fflags & NOTE_DELETE || event.fflags & NOTE_RENAME) {
-                close (int(event.ident));
-                watch_fd_map_.erase (int(event.ident));
+                close (static_cast<int> (event.ident));
+                watch_fd_map_.erase (static_cast<int> (event.ident));
                 if (std::filesystem::exists (fs_path)) {
                     Notify (sandbox, path);
                     if (!passthru_) {
-                        OpenOutputs (sandbox);
-                        WriteOutputs (path);
-                        CloseOutputs();
+                        transmit = true;
                     }
                 }
                 else {
@@ -260,9 +252,20 @@ WatchNode::Monitor (const string& sandbox)
             }
             else if (event.fflags & NOTE_FUNLOCK) {
                 LDEBUG << "File Closed: " << path;
-                OpenOutputs (sandbox);
-                WriteOutputs (path);
-                CloseOutputs();
+                transmit = true;
+            }
+
+            if (transmit) {
+                // Time-based filtering of duplicates
+                auto now = std::chrono::steady_clock::now();
+                auto it = notifications_.find (path);
+
+                if (it == notifications_.end() || (now - it->second) >= debounce_time) {
+                    notifications_[path] = now;
+                    OpenOutputs (sandbox);
+                    WriteOutputs (path);
+                    CloseOutputs();
+                }
             }
         }
     }

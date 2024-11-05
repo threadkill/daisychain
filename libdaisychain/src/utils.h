@@ -228,33 +228,7 @@ m_get_thread_name()
     if (result != 0) {
         return "noname";
     }
-    return std::string (name);
-}
-#endif
-
-
-#if defined(_WIN32)
-#include <windows.h>
-inline void
-m_set_thread_name (const std::string& name)
-{
-    HRESULT hr = SetThreadDescription (GetCurrentThread(), std::wstring(name.begin(), name.end()).c_str());
-    if (FAILED (hr)) {
-        std::cerr << "Failed to set thread description" << std::endl;
-    }
-}
-#elif defined(__linux__) || defined(__APPLE__)
-#include <pthread.h>
-inline void
-m_set_thread_name (const std::string& name)
-{
-    pthread_setname_np(pthread_self(), name.c_str());
-}
-#else
-inline void
-m_set_thread_name (const std::string& name)
-{
-    // No-op on unsupported platforms
+    return {name};
 }
 #endif
 

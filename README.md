@@ -22,16 +22,14 @@
 
 DaisyChain is a node-based dependency graph for executing programs which typically involve file processing. In addition to command-line support, a GUI application can be used for executing scripts and programs without the need to interact with a terminal. The GUI supports drag-n-drop for files (*both graphs and file inputs*). Nodes in the graph can be executed in serial or parallel.
 
+The primary node type is the CommandLine node which runs programs in a shell environment. Executables run by this node are __NOT__ required to support UNIX pipeline semantics (e.g. read STDIN, write STDOUT). The graph functions like [xargs](https://www.man7.org/linux/man-pages/man1/xargs.1.html#EXAMPLES) in that regard. However, standard output can be captured and used as input. The graph itself simply passes string tokens along and waits for the nodes to finish.
+
 The project consists of the following components:
 
 * __daisy__ - command-line application for executing graphs and setting inputs and options.
 * __chain__ - GUI application for creating and executing graphs.
 * __libdaisychain__ - the core library.
 * __pydaisychain__ - the Python module that provides bindings for the core library.
-
-[^1]: *the NodeEditor project used by DaisyChain __IS__ a data flow graph.*
-
-DaisyChain is __not__ a data flow graph[^1] and simply passes string tokens along to nodes. Executables run by the graph are __not__ required to support UNIX pipeline semantics (e.g. read stdin, write stdout). The graph functions like [xargs](https://www.man7.org/linux/man-pages/man1/xargs.1.html#EXAMPLES) in that regard. However, standard output can be captured and used as input.
 
 <br/>
 
@@ -57,7 +55,7 @@ The current set of executable nodes includes:
 * __CommandLine__ - executes external programs via shell environment.
 * __Filter__ - provides string matching via globbing or regular expressions.
 * __Concat__ - concatenates multiple inputs into a single output.
-* __Distro__ - distributes tokens across multiple outputs in round-robin fashion, skipping busy outputs.
+* __Distro__ - facilitates parallel processing by distributing tokens across multiple outputs in round-robin fashion, skipping busy outputs.
 * __FileList__ - converts a text file into input line-by-line.
 * __Watch__ - polls for changes to directories/files and writes the modified filenames to the outputs.
 
