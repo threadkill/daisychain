@@ -14,29 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#pragma once
-
-#include <algorithm>
-#include <cstdint>
-#include <fcntl.h>
-#include <iostream>
-#include <list>
-#include <string>
-#include <utility>
-#include <vector>
-#include <set>
-#ifdef _WIN32
-#include <io.h>
-#include <windows.h>
-#include <atomic>
-#else
-#include <sys/poll.h>
-#include <wordexp.h>
-#include <cerrno>
-#endif
-
 #include "node.h"
-#include "graph.h"
 
 
 namespace daisychain {
@@ -896,7 +874,7 @@ Node::shell_expand (const string& input) const
 
 #else
 string
-Node::shell_expand (const string& input)
+Node::shell_expand (const string& input) const
 {
     wordexp_t p;
     char** w;

@@ -16,6 +16,25 @@
 
 #pragma once
 
+#include <list>
+#include <string>
+#include <utility>
+#include <vector>
+#include <set>
+#include <algorithm>
+#include <cstdint>
+#include <fcntl.h>
+#include <iostream>
+#ifdef _WIN32
+#include <io.h>
+#include <windows.h>
+#include <atomic>
+#else
+#include <sys/poll.h>
+#include <wordexp.h>
+#include <cerrno>
+#endif
+
 #include "logger.h"
 #include "utils.h"
 
@@ -200,8 +219,8 @@ protected:
     string outputfile_;
 
     bool isroot_;
-    list<string> inputs_;
-    list<string> outputs_;
+    std::list<string> inputs_;
+    std::list<string> outputs_;
     atomic<bool> terminate_;
     string threadname_;
 
