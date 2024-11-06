@@ -110,11 +110,10 @@ GUI Dependencies:
 
 #### CMake
 
-1. ```git clone git@github.com:threadkill/daisychain.git```
-2. ```cd daisychain && git submodule update --init --recursive```
-3. ```mkdir build && cd build```
-4. ```cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=<install dir> -DCMAKE_PREFIX_PATH=<Qt6_Root>/<arch>```
-5. ```cmake --build . --target install -j```
+1. ```git clone --recurse-submodules git@github.com:threadkill/daisychain.git```
+1. ```mkdir -p daisychain/build && cd $_```
+1. ```cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=<install dir> -DCMAKE_PREFIX_PATH=<Qt6_Root>/<arch>```
+1. ```cmake --build . --target install -j```
 
 	*individual build targets:* __*daisy, chain, libdaisychain, pydaisychain*__
 
@@ -122,12 +121,12 @@ GUI Dependencies:
 
 *The configure scripts currently only support building the library (__libdaisychain__) and the command-line application (__daisy__). When building the GUI application (chain) or the python bindings (pydaisychain), use the CMake buildscripts.*
 
-1. ```git clone git@github.com:threadkill/daisychain.git```
-2. ```cd daisychain && git submodule update --init --recursive```
-3. ```./bootstrap```
-4. ```mkdir build && cd build```
-5. ```../configure --prefix=<install dir>```
-6. ```make -j5 install```
+1. ```git clone --recurse-submodules git@github.com:threadkill/daisychain.git```
+1. ```cd daisychain```
+1. ```./bootstrap```
+1. ```mkdir build && cd $_```
+1. ```../configure --prefix=<install dir>```
+1. ```make -j5 install```
 
 	*individual build targets:* __*daisy, libdaisychain*__
     
