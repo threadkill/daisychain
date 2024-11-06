@@ -843,7 +843,7 @@ Node::input_indices() const
     std::map<string, vector<unsigned int>> indices;
 
     for (const auto& input : inputs_) {
-        if (!indices.count (input)) {
+        if (!indices.contains (input)) {
             indices[input];
         }
         indices[input].push_back (idx);
@@ -857,7 +857,7 @@ Node::input_indices() const
 string
 Node::shell_expand (const string& input) const
 {
-    DWORD bufferSize = ExpandEnvironmentStringsA (input.c_str(), NULL, 0);
+    DWORD bufferSize = ExpandEnvironmentStringsA (input.c_str(), nullptr, 0);
     if (bufferSize == 0) {
         LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
         return "";
@@ -869,7 +869,7 @@ Node::shell_expand (const string& input) const
         return "";
     }
 
-    return string (buffer.data());
+    return {buffer.data()};
 }
 
 #else
