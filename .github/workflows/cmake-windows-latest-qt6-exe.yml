@@ -6,7 +6,7 @@ on:
       tag:
         description: "Tag to use for the release"
         required: true
-        default: "win-latest"  # Default tag
+        default: "build/installer/windows-latest" # Default tag
 
 env:
   BUILD_TYPE: Release
