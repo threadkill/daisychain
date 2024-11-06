@@ -71,6 +71,8 @@ The ```${OUTPUT}``` variable is automatically set equal to the ```${INPUT}``` va
 substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Additionally, for CommandLine nodes,
 ```${OUTPUT}``` can be set to ```${STDOUT}```.
 
+__Notes__ can be stored with the graph and displayed in the GUI.
+
 <br/>
 
 ## Downloads
