@@ -26,9 +26,7 @@ using namespace filesystem;
 
 WatchNode::WatchNode() :
     passthru_ (false),
-    recursive_ (false),
-    only_files_ (false),
-    only_dirs_ (false)
+    recursive_ (false)
 {
 #ifdef _WIN32
     stopwatching_ = false;
@@ -200,7 +198,6 @@ WatchNode::Monitor (const string& sandbox)
 {
     int numevents = -1;
     struct kevent event{};
-    string previous;
 
     // must be stopped with a SIGINT (ctrl-c).
     while (true) {
@@ -210,10 +207,11 @@ WatchNode::Monitor (const string& sandbox)
             continue;
         }
 
-        string path = watch_fd_map_[int(event.ident)];
+        string path = watch_fd_map_[static_cast<int> (event.ident)];
         auto fs_path = filesystem::path (path);
 
-        if (is_directory (fs_path)) {
+        if (is_directory (fs_path) && recursive_) {
+            // New directory notification (add subdirectories to watch)
             std::vector<string> newpaths;
             for (const auto& comp : recursive_directory_iterator (path)) {
                 newpaths.push_back (comp.path());
@@ -232,31 +230,23 @@ WatchNode::Monitor (const string& sandbox)
                 if (!found) {
                     LDEBUG << "New file: " << newpath;
                     Notify (sandbox, newpath);
-                    previous = newpath;
                 }
             }
         }
         else {
+            bool transmit = false;
+
             if (event.fflags & NOTE_WRITE) {
                 LDEBUG << "Written: " << path;
-                if (path != previous) {
-                    OpenOutputs (sandbox);
-                    WriteOutputs (path);
-                    CloseOutputs();
-                }
-                else {
-                    previous.clear();
-                }
+                transmit = true;
             }
             else if (event.fflags & NOTE_DELETE || event.fflags & NOTE_RENAME) {
-                close (int(event.ident));
-                watch_fd_map_.erase (int(event.ident));
+                close (static_cast<int> (event.ident));
+                watch_fd_map_.erase (static_cast<int> (event.ident));
                 if (std::filesystem::exists (fs_path)) {
                     Notify (sandbox, path);
                     if (!passthru_) {
-                        OpenOutputs (sandbox);
-                        WriteOutputs (path);
-                        CloseOutputs();
+                        transmit = true;
                     }
                 }
                 else {
@@ -265,9 +255,20 @@ WatchNode::Monitor (const string& sandbox)
             }
             else if (event.fflags & NOTE_FUNLOCK) {
                 LDEBUG << "File Closed: " << path;
-                OpenOutputs (sandbox);
-                WriteOutputs (path);
-                CloseOutputs();
+                transmit = true;
+            }
+
+            if (transmit) {
+                // Time-based filtering of duplicates
+                auto now = std::chrono::steady_clock::now();
+                auto it = notifications_.find (path);
+
+                if (it == notifications_.end() || (now - it->second) >= debounce_time) {
+                    notifications_[path] = now;
+                    OpenOutputs (sandbox);
+                    WriteOutputs (path);
+                    CloseOutputs();
+                }
             }
         }
     }
@@ -328,7 +329,7 @@ WatchNode::Notify (const string& sandbox, const string& path)
 
     // If path specified is a directory, then traverse and find all files and folders.
     auto fs_path = filesystem::path (path);
-    if (is_directory(fs_path)) {
+    if (recursive_ && is_directory (fs_path)) {
         for (const auto& comp: recursive_directory_iterator (path)) {
             paths.push_back (comp.path());
         }
@@ -392,7 +393,7 @@ WatchNode::Notify (const string& sandbox, const string& path)
             }
         }
         // All files found should pass through the graph initially.
-        if (is_regular_file (fs_path)) {
+        if (passthru_ && is_regular_file (fs_path)) {
             OpenOutputs (sandbox);
             WriteOutputs (input);
             CloseOutputs();
@@ -405,21 +406,18 @@ WatchNode::Notify (const string& sandbox, const string& path)
 
 #define BUF_LEN (100 * (sizeof (struct inotify_event) + NAME_MAX + 1))
 
-void
+[[noreturn]] void
 WatchNode::Monitor (const string& sandbox)
 {
     struct pollfd pfds[1];
     pfds[0].fd = notify_fd_;
     pfds[0].events = POLLIN;
 
-    string previous;    // Using this to keep track of successive events.
-
     // must be stopped with a SIGINT (ctrl-c).
     while (true) {
         auto ret = poll (pfds, 1, 2);
 
         if (ret <= 0 || !pfds[0].revents) {
-            previous.clear();
             continue;
         }
 
@@ -427,7 +425,6 @@ WatchNode::Monitor (const string& sandbox)
         ssize_t bytesread = read (notify_fd_, buffer, BUF_LEN);
 
         if (bytesread <= 0) {
-            previous.clear();
             continue;
         }
 
@@ -461,8 +458,12 @@ WatchNode::Monitor (const string& sandbox)
             }
 
             if (!input.empty()) {
-                if (input != previous) {
-                    previous = input;
+                // Time-based filtering of duplicates
+                auto now = std::chrono::steady_clock::now();
+                auto it = notifications_.find (input);
+
+                if (it == notifications_.end() || (now - it->second) >= debounce_time) {
+                    notifications_[input] = now;
                     OpenOutputs (sandbox);
                     WriteOutputs (input);
                     CloseOutputs();

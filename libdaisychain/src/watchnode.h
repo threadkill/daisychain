@@ -44,13 +44,13 @@ public:
 
     void Reset() override
     {
-#ifndef _WIN32
-        fd_in_.clear();
-        fd_out_.clear();
-#else
+#ifdef _WIN32
         stopwatching_ = false;
+        only_files_ = false;
+        only_dirs_ = false;
         watch_handle_map_.clear();  // only directories can be watched on windows
         watch_files_.clear();       // explicitly watched files
+        watch_dirs_.clear();       // explicitly watched files
         dirinfos_.clear();
         terminate_.store (false);
 
@@ -61,6 +61,9 @@ public:
         eofs_ = 0;
         totalbytesread_ = 0;
         totalbyteswritten_ = 0;
+        fd_in_.clear();
+        fd_out_.clear();
+        notifications_.clear();
     }
 
     bool passthru() const { return passthru_; }
@@ -76,19 +79,18 @@ private:
 
     bool Notify (const string& sandbox, const string& path);
 
-    void Monitor (const string& sandbox);
+    [[noreturn]] void Monitor (const string& sandbox);
 
     void RemoveWatches();
 
     void RemoveMonitor() const;
 
-    map<int, string> watch_fd_map_;
-
-    int notify_fd_ = 0;
-
     bool passthru_;
-
     bool recursive_;
+    int notify_fd_ = 0;
+    map<int, string> watch_fd_map_;
+    std::unordered_map<string, std::chrono::steady_clock::time_point> notifications_;
+    std::chrono::milliseconds debounce_time = std::chrono::milliseconds (2000);
 
 #ifdef _WIN32
     void MonitorThread();
@@ -103,8 +105,8 @@ private:
 
     HANDLE iocp_{}; // IO Completion Port HANDLE
     map<string, HANDLE> watch_handle_map_;
-    bool only_files_;
-    bool only_dirs_;
+    bool only_files_{};
+    bool only_dirs_{};
     std::set<string> watch_files_;
     std::set<string> watch_dirs_;
     std::mutex modified_mutex_;
@@ -113,9 +115,7 @@ private:
     std::condition_variable terminate_cv_;
     std::queue<string> modified_files_;
     std::vector<DirectoryInfo*> dirinfos_;
-    std::unordered_map<string, std::chrono::steady_clock::time_point> notifications_;
-    std::chrono::milliseconds debounce_time = std::chrono::milliseconds (2000);
-    bool stopwatching_;
+    bool stopwatching_{};
 
 #endif
 };
