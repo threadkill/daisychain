@@ -184,8 +184,6 @@ public:
 
     std::map<string, vector<unsigned int>> input_indices() const;
 
-    string shell_expand (const string&) const;
-
 #ifdef _WIN32
     static string get_pipename (const string& prefix, const string& uuidpair)
     {

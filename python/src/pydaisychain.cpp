@@ -145,7 +145,6 @@ PYBIND11_MODULE (pydaisychain, m) {
         .def ("outputfile", &Node::outputfile)
         .def ("input_index", &Node::input_index)
         .def ("input_indices", &Node::input_indices)
-        .def ("shell_expand", &Node::shell_expand)
         .def ("concat_inputs", &Node::concat_inputs)
         ;
 

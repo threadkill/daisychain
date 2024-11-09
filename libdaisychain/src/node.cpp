@@ -683,7 +683,7 @@ Node::ReadInputs(std::vector<std::string>& inputs)
 
 
 void
-Node::WriteOutputs (const std::string& output)
+Node::WriteOutputs(const std::string& output)
 {
     if (terminate_.load())
         return;
@@ -691,19 +691,16 @@ Node::WriteOutputs (const std::string& output)
     std::string token = output + '\n';
     std::vector<DWORD> byteswritten (fd_out_.size(), 0); // Tracks bytes written for each pipe
     std::vector<HANDLE> events;                          // Events for overlapped writes to wait for
-    std::vector completed (fd_out_.size(), false);       // Track if writes are complete
+    std::vector<size_t> event_indices;                    // Map events to indices in fd_out_
+    std::vector<bool> completed (fd_out_.size(), false); // Track if writes are complete
 
     size_t index = 0;
-
-    // Issue asynchronous writes for all pipes
-    for (auto it = fd_out_.begin(); it != fd_out_.end(); ++it) {
+    for (auto it = fd_out_.begin(); it != fd_out_.end(); ++it, ++index) {
         HANDLE handle = it->second;
 
-        // Reset necessary fields in the OVERLAPPED structure
         overlapped_writes_[index].Offset = 0;
         overlapped_writes_[index].OffsetHigh = 0;
 
-        // Reset the event handle before issuing the write
         ResetEvent (overlapped_writes_[index].hEvent);
 
         // Issue the asynchronous write
@@ -718,7 +715,7 @@ Node::WriteOutputs (const std::string& output)
         if (fSuccess) {
             // Write completed synchronously
             totalbyteswritten_ += byteswritten[index];
-            completed [index] = true;
+            completed[index] = true;
             FlushFileBuffers (handle);
             LDEBUG << LOGNODE << "Write completed synchronously for pipe handle: " << handle;
         }
@@ -727,31 +724,31 @@ Node::WriteOutputs (const std::string& output)
             if (error == ERROR_IO_PENDING) {
                 // Write is pending, add the event handle to the list of events to wait for
                 events.push_back (overlapped_writes_[index].hEvent);
+                event_indices.push_back (index); // Map this event to the current index
             }
             else {
                 LERROR << LOGNODE << "WriteFile failed with error: " << error;
-                return;  // Exit on error
+                return;
             }
         }
-
-        ++index;
     }
 
     if (events.empty()) {
-        // Writes finished synchronously
         return;
     }
 
-    // Add the termination event to the list of events to wait for
+    // Asynchronous I/O ...
+
     events.push_back (terminate_event_);
+    size_t terminateEventIndex = events.size() - 1;
 
     // Loop until all writes are complete or the termination event is signaled
     while (!terminate_.load()) {
         DWORD waitResult = WaitForMultipleObjects(
-            static_cast<DWORD>(events.size()),  // Number of events
-            events.data(),                      // Array of event handles
-            FALSE,                              // Wait for any event
-            INFINITE                            // No timeout
+            static_cast<DWORD>(events.size()), // Number of events
+            events.data(),                     // Array of event handles
+            FALSE,                             // Wait for any event
+            INFINITE                           // No timeout
         );
 
         if (waitResult == WAIT_FAILED) {
@@ -759,15 +756,15 @@ Node::WriteOutputs (const std::string& output)
             return;
         }
 
-        // Handle termination event
-        if (waitResult == WAIT_OBJECT_0 + events.size() - 1) {
+        DWORD eventIndex = waitResult - WAIT_OBJECT_0;
+
+        if (eventIndex == terminateEventIndex) {
             LDEBUG << LOGNODE << "Termination event signaled, exiting WriteOutputs.";
             return;
         }
 
-        // Handle completed write event
-        index = waitResult - WAIT_OBJECT_0;
-        if (index < fd_out_.size()) {
+        if (eventIndex < event_indices.size()) {
+            size_t index = event_indices[eventIndex]; // Get the correct index for fd_out_ and overlapped_writes_
             HANDLE handle = std::next (fd_out_.begin(), index)->second;
 
             DWORD dwWritten = 0;
@@ -775,7 +772,7 @@ Node::WriteOutputs (const std::string& output)
                 handle,
                 &overlapped_writes_[index],
                 &dwWritten,
-                TRUE
+                FALSE
             );
 
             if (!overlappedResult) {
@@ -785,19 +782,26 @@ Node::WriteOutputs (const std::string& output)
             }
 
             totalbyteswritten_ += dwWritten;
-            completed [index] = true;  // Mark this write as complete
+            completed[index] = true;
 
             FlushFileBuffers (handle);
+            LDEBUG << LOGNODE << "Write completed asynchronously for pipe handle: " << handle;
+
+            ResetEvent (overlapped_writes_[index].hEvent);
+
+            // Adjust indices
+            events.erase (events.begin() + eventIndex);
+            event_indices.erase (event_indices.begin() + eventIndex);
+            terminateEventIndex = events.size() - 1;
         }
 
-        // Check if all writes are complete
-        if (ranges::all_of (completed , [](bool complete) { return complete; })) {
+        if (ranges::all_of (completed, [](bool complete) { return complete; })) {
             break;
         }
     }
 }
-
 #endif
+
 
 void
 Node::Cleanup()
@@ -853,57 +857,4 @@ Node::input_indices() const
     return indices;
 }
 
-#ifdef _WIN32
-string
-Node::shell_expand (const string& input) const
-{
-    DWORD bufferSize = ExpandEnvironmentStringsA (input.c_str(), nullptr, 0);
-    if (bufferSize == 0) {
-        LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
-        return "";
-    }
-
-    std::vector<char> buffer (bufferSize);
-    if (ExpandEnvironmentStringsA (input.c_str(), buffer.data(), bufferSize) == 0) {
-        LERROR << LOGNODE << "ExpandEnvironmentStrings failed.";
-        return "";
-    }
-
-    return {buffer.data()};
-}
-
-#else
-string
-Node::shell_expand (const string& input) const
-{
-    wordexp_t p;
-    char** w;
-    bool stat = false;
-
-    setenv ("IFS", "", true);
-    int ret = wordexp (("\"" + input + "\"").c_str(), &p, WRDE_SHOWERR);
-    if (ret == WRDE_SYNTAX) {
-        LERROR << LOGNODE << "Shell syntax error.";
-    }
-    else if (ret == WRDE_BADCHAR) {
-        LERROR << LOGNODE
-               << "Words argument contains unquoted characters: '\\n', ‘|’, ‘&’, ‘;’, ‘<’, "
-                  "‘>’, ‘(’, ‘)’, ‘{’, ‘}’.";
-    }
-    else {
-        stat = true;
-    }
-
-    if (!stat) {
-        return "";
-    }
-
-    w = p.we_wordv;
-    const string& output = w[0];
-
-    wordfree (&p);
-
-    return output;
-} // parse_outputfile
-#endif
 } // namespace daisychain

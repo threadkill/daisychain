@@ -57,21 +57,26 @@ CommandLineNode::Initialize (json& keydata, bool keep_uuid)
 bool
 CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& env)
 {
+    TIMED_SCOPE (timerObj, LOGNODE);
+
     // root nodes call this method directly. non-root nodes get here via `Node::Execute (sandbox,
     // env) after processing their inputs.
-    LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << LOGNODE ;
+    LINFO << "Executing " << (isroot_ ? "root: " : "node: ") << name_;
 
     bool stat = true;
 
     // prepare the shell environment
     for (auto& [key, value] : env.items()) {
-#ifdef _WIN32
-        if (!SetEnvironmentVariable (key.c_str(), shell_expand (value.get<string>()).c_str()))
-#else
+        set_variable (key, value.get<string>());
+    }
+
+#ifndef _WIN32
+    // prepare the shell environment
+    for (auto& [key, value] : env.items()) {
         if (setenv (key.c_str(), shell_expand (value.get<string>()).c_str(), true) < 0)
-#endif
             return false;
     }
+#endif
 
     // root nodes are passed a single string of all inputs and these
     // inputs may need to be tokenized if batch == false.
@@ -156,6 +161,94 @@ CommandLineNode::command()
 } // CommandLineNode::command
 
 
+#ifdef _WIN32
+#include <windows.h>
+#include <string>
+#include <vector>
+#include <iostream>
+#include <filesystem> // For fs::path
+namespace fs = std::filesystem;
+
+bool
+CommandLineNode::run_command (const std::string& input, const std::string& sandbox)
+{
+    // Set up variables
+    bool stat = false;
+    bool use_std_out = false;
+    std::string output = input;
+
+    // Replace newline delimiters with spaces before shell expansion
+    bool singlefile = true;
+    std::string input_ = input;
+    for (char& ch : input_) {
+        if (ch == '\n') {
+            singlefile = false;
+            ch = ' ';
+        }
+    }
+
+    set_variable ("SANDBOX", sandbox);
+    set_variable ("INPUT", input_);
+
+    if (singlefile) {
+        std::string basename = fs::path(input).filename().string();
+        set_variable ("BASENAME", basename);
+    }
+
+    if (!outputfile_.empty()) {
+        if (outputfile_.find("STDOUT") != std::string::npos) {
+            use_std_out = true;
+        }
+        else {
+            output = shell_expand (outputfile_);
+            set_variable ("OUTPUT", output);
+        }
+    }
+
+    if (test_) {
+        LTEST << LOGNODE << "\n" << shell_expand (command_);
+        OpenOutputs(sandbox);
+        WriteOutputs(output);
+        CloseOutputs();
+        return true;
+    }
+
+    // Log the command line for debugging
+    LDEBUG << LOGNODE << "Executing command line: " << shell_expand ("echo \"" + command_ + "\"");
+
+    std::string std_out;
+    stat = run_cmdexe (command_, std_out);
+
+    // Log the output from the child process
+    if (!std_out.empty()) {
+        LDEBUG << LOGNODE << "Child process output:\n" << std_out;
+    }
+
+    if (!stat) {
+        LERROR << LOGNODE << "run_command failed.";
+        LERROR << LOGNODE << "\n" << shell_expand (command_);
+    } else {
+        LDEBUG << LOGNODE << "run_command succeeded.";
+
+        if (use_std_out) {
+            std::vector<std::string> tokens;
+            set_variable ("STDOUT", std_out);
+            output = shell_expand (outputfile_);
+            m_split_input (output, tokens);
+
+            for (const auto& token : tokens) {
+                WriteOutputs(token);
+            }
+        } else {
+            WriteOutputs(output);
+        }
+    }
+
+    return stat;
+} // CommandLineNode::run_command
+
+#else
+
 bool
 CommandLineNode::run_command (const string& input, const string& sandbox)
 {
@@ -167,19 +260,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     auto output = input;
 
-#ifdef _WIN32
-    // replacing newline delimiters with spaces before shell expansion.
-    auto input_ = input;
-    for (char& ch : input_) {
-        if (ch == '\n') {
-            ch = ' ';
-        }
-    }
-
-    if (!SetEnvironmentVariable ("INPUT", shell_expand (input_).c_str()))
-#else
     if (setenv ("INPUT", shell_expand (input).c_str(), true) < 0)
-#endif
         return false;
 
     if (!outputfile_.empty()) {
@@ -188,11 +269,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         }
         else {
             output = shell_expand (outputfile_);
-#ifdef _WIN32
-            SetEnvironmentVariable ("OUTPUT", output.c_str());
-#else
             setenv ("OUTPUT", output.c_str(), true);
-#endif
         }
     }
 
@@ -205,19 +282,10 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         return true;
     }
 
-#ifdef _WIN32
-#ifdef _DEBUG
-    _putenv (R"(COMSPEC=C:\Windows\System32\cmd.exe)");
-    _putenv (R"(PATH=%PATH%;C:\Windows\System32)");
-#endif
-    string cmd = command_ + " 2>&1";
-    FILE* fp = _popen (cmd.c_str(), "r");
-#else
     // setting IFS explicitly to newline-only facilitates handling paths with spaces.
     // redirecting stderr to stdout for log capture.
     string cmd = "IFS=\"\n\";" + command_ + " 2>&1";
     FILE* fp = popen (cmd.c_str(), "r");
-#endif
 
     if (fp == nullptr) {
         stat = false;
@@ -231,11 +299,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
         }
     }
 
-#ifdef _WIN32
-    if (_pclose (fp) == 0) {
-#else
     if (pclose (fp) == 0) {
-#endif
         stat = true;
     }
 
@@ -256,11 +320,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
         // capture program output and use for output var.
         if (use_std_out) {
-#ifdef _WIN32
-            SetEnvironmentVariable ("STDOUT", std_out.c_str());
-#else
             setenv ("STDOUT", std_out.c_str(), true);
-#endif
             output = shell_expand (outputfile_);
             m_split_input (output, tokens);
 
@@ -276,4 +336,161 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     return stat;
 } // CommandLineNode::run_command
+#endif
+
+#ifdef _WIN32
+
+bool
+CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
+{
+    std::string cmdLine = "cmd.exe /C \"call " + command + "\"";
+
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    SECURITY_ATTRIBUTES sa;
+
+    ZeroMemory (&si, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags |= STARTF_USESTDHANDLES;
+
+    ZeroMemory (&pi, sizeof(pi));
+
+    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = nullptr;
+
+    // Create pipes for STDOUT and STDERR
+    HANDLE hStdOutRead = nullptr;
+    HANDLE hStdOutWrite = nullptr;
+
+    if (!CreatePipe (&hStdOutRead, &hStdOutWrite, &sa, 0)) {
+        LERROR << LOGNODE << "Failed to create pipe for STDOUT. " << GetLastError();
+        return false;
+    }
+
+    // Ensure the read handle is not inherited
+    SetHandleInformation (hStdOutRead, HANDLE_FLAG_INHERIT, 0);
+
+    // Redirect both STDOUT and STDERR to the same pipe
+    si.hStdOutput = hStdOutWrite;
+    si.hStdError = hStdOutWrite;
+    si.hStdInput = nullptr; // No need to send any input
+
+    auto env = get_environment();
+
+    // Create the process
+    BOOL result = CreateProcessA(
+        nullptr,
+        &cmdLine[0],      // Command line
+        nullptr,          // Process security attributes
+        nullptr,          // Primary thread security attributes
+        true,             // Handles are inherited
+        CREATE_NO_WINDOW, // Creation flags (hide the window)
+        env.data(),       // Use parent's environment
+        nullptr,          // Use parent's current directory
+        &si,
+        &pi
+    );
+
+    CloseHandle (hStdOutWrite);
+
+    if (!result) {
+        LERROR << LOGNODE << "CreateProcess failed with error " << GetLastError();
+        CloseHandle (hStdOutRead);
+        return false;
+    }
+
+    const DWORD bufferSize = 8192;
+    char buffer[bufferSize];
+    DWORD bytesRead;
+
+    // Read until there is no more data
+    while (true) {
+        BOOL success = ReadFile (hStdOutRead, buffer, bufferSize - 1, &bytesRead, nullptr);
+        if (!success) {
+            DWORD error = GetLastError();
+            if (error == ERROR_BROKEN_PIPE) {
+                // Child process has closed the pipe (normal termination)
+                break;
+            } else {
+                LERROR << LOGNODE << "ReadFile failed with error " << error;
+                break;
+            }
+        }
+        if (bytesRead > 0) {
+            buffer[bytesRead] = '\0';
+            output += buffer;
+        }
+    }
+
+    WaitForSingleObject (pi.hProcess, INFINITE);
+
+    DWORD exitCode;
+    if (!GetExitCodeProcess (pi.hProcess, &exitCode)) {
+        LERROR << LOGNODE << "GetExitCodeProcess failed with error " << GetLastError();
+        exitCode = 1;
+    }
+
+    CloseHandle (hStdOutRead);
+    CloseHandle (pi.hProcess);
+    CloseHandle (pi.hThread);
+
+    return (exitCode == 0);
+} // CommandLineNode::run_cmdexe
+
+
+string
+CommandLineNode::shell_expand (const string& input)
+{
+    // Perform variable expansion for use outside of CreateProcess
+    std::string command = "echo " + input;
+    string output;
+    if (!run_cmdexe (command, output))
+        return "";
+
+    // Remove any trailing newline characters that echo adds
+    if (!output.empty() && output.back() == '\n') {
+        output.pop_back();
+        if (!output.empty() && output.back() == '\r') {
+            output.pop_back();
+        }
+    }
+
+    return output;
+} // CommandLineNode::shell_expand
+
+#else
+string
+Node::shell_expand (const string& input) const
+{
+    wordexp_t p;
+    char** w;
+    bool stat = false;
+
+    setenv ("IFS", "", true);
+    int ret = wordexp (("\"" + input + "\"").c_str(), &p, WRDE_SHOWERR);
+    if (ret == WRDE_SYNTAX) {
+        LERROR << LOGNODE << "Shell syntax error.";
+    }
+    else if (ret == WRDE_BADCHAR) {
+        LERROR << LOGNODE
+               << "Words argument contains unquoted characters: '\\n', ‘|’, ‘&’, ‘;’, ‘<’, "
+                  "‘>’, ‘(’, ‘)’, ‘{’, ‘}’.";
+    }
+    else {
+        stat = true;
+    }
+
+    if (!stat) {
+        return "";
+    }
+
+    w = p.we_wordv;
+    const string& output = w[0];
+
+    wordfree (&p);
+
+    return output;
+} // parse_outputfile
+#endif
 } // namespace daisychain
