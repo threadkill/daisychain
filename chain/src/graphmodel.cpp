@@ -66,6 +66,9 @@ void
 GraphModel::updateInput (const std::string& input)
 {
     graph_->set_input (input);
+    std::vector<string> inputs;
+    m_split_input (input, inputs);
+    num_inputs_ = static_cast<unsigned int>(inputs.size());
     Q_EMIT (inputUpdated());
 } // GraphModel::updateInput
 

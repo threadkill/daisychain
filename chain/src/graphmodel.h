@@ -62,6 +62,8 @@ public:
 
     const std::string& input();
 
+    unsigned int num_inputs() const { return num_inputs_; }
+
     std::shared_ptr<Graph> graph() { return graph_; }
 
 public Q_SLOTS:
@@ -122,4 +124,5 @@ private:
     std::shared_ptr<Graph> graph_;
     std::string graphlog_;
     QThread* exec_thread;
+    unsigned int num_inputs_{0};
 };

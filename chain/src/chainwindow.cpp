@@ -216,12 +216,32 @@ ChainWindow::setupInputsDialog()
     textedit->setPalette (darkPalette());
 
     textedit->setObjectName ("dialogtextedit");
-    textedit->setReadOnly (true);
-    textedit->setUndoRedoEnabled (false);
+    textedit->setReadOnly (false);
+    textedit->setUndoRedoEnabled (true);
     textedit->setStyleSheet (QString::fromStdString (chainScrollBarQss));
 
     textedit->setContextMenuPolicy (Qt::CustomContextMenu);
     connect (textedit, &QTextEdit::customContextMenuRequested, this, &ChainWindow::showInputsContextMenu);
+    connect (textedit, &QTextEdit::textChanged, [&]() {
+        const auto textedit_ = inputsdialog_->findChild<QTextEdit*> ("dialogtextedit");
+        auto paths = textedit_->toPlainText().toStdString();
+        model_->blockSignals (true);
+        model_->updateInput (paths);
+        model_->blockSignals (false);
+
+        const auto btn = findChild<QWidget*> ("filesbtn");
+        if (!paths.empty()) {
+            btn->setGraphicsEffect (nullptr);
+        }
+        else {
+            auto gfx = new QGraphicsColorizeEffect();
+            gfx->setColor (QColor (0, 0, 0));
+            gfx->setStrength (1.0);
+            btn->setGraphicsEffect (gfx);
+        }
+        updateHud();
+    });
+
 
     auto vlayout = new QVBoxLayout (inputsdialog_);
     vlayout->setContentsMargins (5, 5, 5, 5);
@@ -851,8 +871,10 @@ ChainWindow::updateInputs()
     const auto input = model_->input();
 
     const auto textedit = inputsdialog_->findChild<QTextEdit*> ("dialogtextedit");
+    textedit->blockSignals (true);
     textedit->clear();
     textedit->setText (QString::fromStdString (input));
+    textedit->blockSignals (false);
 
     const auto btn = findChild<QWidget*> ("filesbtn");
     if (!input.empty()) {
@@ -914,8 +936,7 @@ void
 ChainWindow::updateHud()
 {
     QString text;
-    auto input = findChild<QTextEdit*> ("dialogtextedit");
-    text.setNum (input->document()->lineCount()-1);
+    text.setNum (model_->num_inputs());
     inputcountlabel_.setText (text);
     text.setNum (model_->graph()->nodes().size());
     nodecountlabel_.setText (text);
