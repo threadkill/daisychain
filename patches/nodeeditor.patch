@@ -1,0 +1,16 @@
+diff a/nodeeditor/src/AbstractNodeGeometry.cpp b/nodeeditor/src/AbstractNodeGeometry.cpp
+--- a/nodeeditor/src/AbstractNodeGeometry.cpp
++++ b/nodeeditor/src/AbstractNodeGeometry.cpp
+@@ -19,10 +19,8 @@ QRectF AbstractNodeGeometry::boundingRect(NodeId const nodeId) const
+ {
+     QSize s = size(nodeId);
+ 
+-    double ratio = 0.20;
+-
+-    int widthMargin = s.width() * ratio;
+-    int heightMargin = s.height() * ratio;
++    int widthMargin = 8;
++    int heightMargin = 8;
+ 
+     QMargins margins(widthMargin, heightMargin, widthMargin, heightMargin);
+ 

@@ -18,6 +18,11 @@ set (CMAKE_AUTOMOC ON)
 set (CMAKE_AUTORCC ON)
 
 # NodeEditor
+add_custom_target (apply_nodeeditor_patch
+    COMMAND ${CMAKE_COMMAND} -E echo "Applying patch to NodeEditor..."
+    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/3rdparty git apply ${CMAKE_SOURCE_DIR}/patches/nodeeditor.patch
+    COMMENT "Patching NodeEditor before building"
+)
 set (CMAKE_POLICY_DEFAULT_CMP0077 NEW)
 set (BUILD_SHARED_LIBS OFF)
 add_subdirectory (
@@ -25,6 +30,7 @@ add_subdirectory (
     ${CMAKE_CURRENT_BINARY_DIR}/nodeeditor
     EXCLUDE_FROM_ALL
 )
+add_dependencies (QtNodes apply_nodeeditor_patch)
 
 # Include source directories
 include_directories (
@@ -189,6 +195,14 @@ else()
     add_executable (chain ${chain_SOURCES})
     install (TARGETS chain DESTINATION .)
 endif()
+
+add_custom_command (TARGET chain
+    POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E echo "Running post-build command for QtNodes..."
+    COMMAND git checkout nodeeditor/src/AbstractNodeGeometry.cpp
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/3rdparty
+    COMMENT "Post-build git command for reverting patched QtNodes"
+)
 
 # Link necessary libraries
 target_link_libraries (chain PRIVATE daisychain_static Qt6::Widgets QtNodes)
