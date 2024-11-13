@@ -227,7 +227,7 @@ protected:
         HANDLE handle{};
         OVERLAPPED overlapped{};
         HANDLE event{};
-        std::string partialMessage;
+        std::string message;
     };
 
     std::vector<PipeInfo> pipeinfos_;

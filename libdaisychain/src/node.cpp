@@ -544,110 +544,94 @@ Node::CloseWindowsPipes()
 
 
 int
-Node::ReadInputs(std::vector<std::string>& inputs)
+Node::ReadInputs (std::vector<std::string>& inputs)
 {
     if (terminate_.load())
         return -1;
 
     constexpr uint32_t BUFFSIZE = 8192;
-    char cbuffer[BUFFSIZE + 1];
+    std::vector<HANDLE> events;                         // Events for overlapped writes to wait for
+    std::vector<size_t> event_indices;                  // Map events to indices in fd_out_
+    string input;
+    size_t terminate_idx;
 
+    size_t index = 0;
     // Issue asynchronous reads for all pipes before waiting for events
     for (auto& pipeinfo : pipeinfos_) {
-        DWORD bytesread = 0;
-        BOOL stat = ReadFile (pipeinfo.handle, cbuffer, BUFFSIZE, &bytesread, &pipeinfo.overlapped);
+        DWORD bytesread_ = 0;
+        DWORD error;
+        pipeinfo.message.resize (BUFFSIZE);
 
-        if (!stat && GetLastError() != ERROR_IO_PENDING) {
-            DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE) {
-                LERROR << LOGNODE << "Broken pipe.";
-            }
-            else {
+        do {
+            BOOL stat = ReadFile (pipeinfo.handle, &pipeinfo.message[0], BUFFSIZE, &bytesread_, &pipeinfo.overlapped);
+            error = GetLastError();
+
+            if (!stat) {
+                if (error == ERROR_IO_PENDING) {
+                    events.push_back (pipeinfo.overlapped.hEvent);
+                    event_indices.push_back (index);
+                    break;
+                }
+                if (error == ERROR_BROKEN_PIPE) {
+                    LERROR << LOGNODE << "Broken pipe.";
+                    return -1;
+                }
                 LERROR << LOGNODE << "Error initiating asynchronous read: " << error;
+                return -1;
             }
-            return -1;
-        }
-    }
 
-    // Wait for any of the named pipes to signal they have data
-    const DWORD waitResult = WaitForMultipleObjects(
-        static_cast<DWORD>(read_events_.size()),  // Number of events
-        read_events_.data(),                      // Array of event handles
-        FALSE,                                    // Wait for any event
-        INFINITE                                  // No timeout
-    );
-
-    if (waitResult == WAIT_FAILED) {
-        LERROR << LOGNODE << "WaitForMultipleObjects failed.";
-        return -1;
-    }
-
-    if (waitResult == WAIT_OBJECT_0 + read_events_.size() - 1) {
-        LDEBUG << LOGNODE << "Termination event signaled.";
-        ResetEvent (terminate_event_);
-        return -1;
-    }
-
-    DWORD index = waitResult - WAIT_OBJECT_0;
-    if (index >= pipeinfos_.size()) {
-        LERROR << LOGNODE << "Invalid index.";
-        return -1;
-    }
-
-    PipeInfo& pipeinfo = pipeinfos_[index];
-
-    // Use GetOverlappedResult to confirm the read operation and get the number of bytes read
-    DWORD bytesread = 0;
-    BOOL result = GetOverlappedResult (pipeinfo.handle, &pipeinfo.overlapped, &bytesread, TRUE);
-
-    if (!result) {
-        DWORD error = GetLastError();
-        if (error == ERROR_BROKEN_PIPE) {
-            LERROR << LOGNODE << "Broken pipe.";
-            return -1;
-        }
-        if (error != ERROR_MORE_DATA) {
-            LERROR << LOGNODE << "GetOverlappedResult failed with error: " << error;
-            return -1;
-        }
-    }
-
-    // Handle the read data and process it
-    if (bytesread > 0) {
-        cbuffer[bytesread] = '\0';  // Null-terminate the buffer
-        pipeinfo.partialMessage.append (cbuffer, bytesread);
-        totalbytesread_ += bytesread;
-        LDEBUG << LOGNODE << "Bytes read: " << bytesread;
-    }
-
-    // Check if more data remains in the message
-    while (result && bytesread == BUFFSIZE) {
-        bytesread = 0;
-        BOOL stat = ReadFile (pipeinfo.handle, cbuffer, BUFFSIZE, &bytesread, &pipeinfo.overlapped);
-
-        if (!stat && GetLastError() != ERROR_IO_PENDING) {
-            DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE) {
-                LERROR << LOGNODE << "Broken pipe.";
+            if (bytesread_) {
+                pipeinfo.message.resize (bytesread_);
+                input += pipeinfo.message;
+                totalbytesread_ += bytesread_;
+                LDEBUG << LOGNODE << "Synchronous bytes read: " << bytesread_;
             }
-            else {
-                LERROR << LOGNODE << "Error initiating read for remaining data: " << error;
-            }
+        } while (bytesread_ && error == ERROR_MORE_DATA);
+
+        ++index;
+    }
+
+    std::vector completed (events.size(), false);
+
+    if (!events.empty()) {
+        events.push_back (terminate_event_);
+        terminate_idx = events.size() - 1;
+    }
+
+    while (!events.empty() && !terminate_.load()) {
+        // Wait for any of the named pipes to signal they have data
+        const DWORD waitResult = WaitForMultipleObjects(
+            static_cast<DWORD>(events.size()),  // Number of events
+            events.data(),                      // Array of event handles
+            FALSE,                              // Wait for any event
+            INFINITE
+        );
+
+        if (waitResult == WAIT_FAILED) {
+            LERROR << LOGNODE << "WaitForMultipleObjects failed.";
             return -1;
         }
 
-        // Edge case where the original message is exactly the same size as BUFFSIZE
-        DWORD bytesavailable = 0;
-        BOOL peekstat = PeekNamedPipe (pipeinfo.handle, nullptr, 0, nullptr, &bytesavailable, nullptr);
-        if (!peekstat || bytesavailable == 0) {
-            break;
+        DWORD eventIndex = waitResult - WAIT_OBJECT_0;
+        if (eventIndex >= pipeinfos_.size()) {
+            LERROR << LOGNODE << "Invalid index.";
+            return -1;
+        }
+        if (eventIndex == terminate_idx) {
+            LDEBUG << LOGNODE << "Termination event signaled.";
+            ResetEvent (terminate_event_);
+            return -1;
         }
 
-        // Wait for the read operation to complete again
-        result = GetOverlappedResult (pipeinfo.handle, &pipeinfo.overlapped, &bytesread, TRUE);
+        PipeInfo& pipeinfo = pipeinfos_[event_indices[eventIndex]];
+
+        // Use GetOverlappedResult to confirm the read operation and get the number of bytes read
+        DWORD error;
+        DWORD bytesread_ = 0;
+        BOOL result = GetOverlappedResult (pipeinfo.handle, &pipeinfo.overlapped, &bytesread_, TRUE);
 
         if (!result) {
-            DWORD error = GetLastError();
+            error = GetLastError();
             if (error == ERROR_BROKEN_PIPE) {
                 LERROR << LOGNODE << "Broken pipe.";
                 return -1;
@@ -656,20 +640,45 @@ Node::ReadInputs(std::vector<std::string>& inputs)
                 LERROR << LOGNODE << "GetOverlappedResult failed with error: " << error;
                 return -1;
             }
+
+            while (bytesread_ && error == ERROR_MORE_DATA) {
+                input += pipeinfo.message;
+                BOOL stat = ReadFile (pipeinfo.handle, &pipeinfo.message[0], BUFFSIZE, &bytesread_, &pipeinfo.overlapped);
+                error = GetLastError();
+
+                if (!stat && error != ERROR_MORE_DATA) {
+                    if (error == ERROR_BROKEN_PIPE) {
+                        LERROR << LOGNODE << "Broken pipe.";
+                        return -1;
+                    }
+                    LERROR << LOGNODE << "Error initiating asynchronous read: " << error;
+                    return -1;
+                }
+
+                if (bytesread_) {
+                    pipeinfo.message.resize (bytesread_);
+                    input += pipeinfo.message;
+                    totalbytesread_ += bytesread_;
+                    LDEBUG << LOGNODE << "Asynchronous bytes read: " << bytesread_;
+                }
+            }
+        }
+        else {
+            pipeinfo.message.resize (bytesread_);
+            input += pipeinfo.message;
+            totalbytesread_ += bytesread_;
+            LDEBUG << LOGNODE << "Asynchronous bytes read: " << bytesread_;
         }
 
-        if (bytesread > 0) {
-            cbuffer[bytesread] = '\0';  // Null-terminate the buffer
-            pipeinfo.partialMessage.append (cbuffer, bytesread);
-            totalbytesread_ += bytesread;
+        completed[eventIndex] = true;
+        ResetEvent (pipeinfo.overlapped.hEvent);
+
+        if (ranges::all_of (completed, [](bool complete) { return complete; })) {
+            break;
         }
     }
 
-    std::string input = pipeinfo.partialMessage;  // Store complete message
     m_split_input (input, inputs);
-
-    pipeinfo.partialMessage.clear();  // Clear the buffer for the next message
-    ResetEvent (pipeinfo.event);
 
     if (auto count = ranges::count (inputs, "EOF")) {
         eofs_ += static_cast<int>(count);
@@ -688,10 +697,14 @@ Node::WriteOutputs(const std::string& output)
     if (terminate_.load())
         return;
 
+    if (output == "EOF") {
+        LDEBUG << LOGNODE << "Writing EOF.";
+    }
+
     std::string token = output + '\n';
     std::vector<DWORD> byteswritten (fd_out_.size(), 0); // Tracks bytes written for each pipe
     std::vector<HANDLE> events;                          // Events for overlapped writes to wait for
-    std::vector<size_t> event_indices;                    // Map events to indices in fd_out_
+    std::vector<size_t> event_indices;                   // Map events to indices in fd_out_
     std::vector<bool> completed (fd_out_.size(), false); // Track if writes are complete
 
     size_t index = 0;
