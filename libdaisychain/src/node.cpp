@@ -91,13 +91,15 @@ void
 Node::Start (NodeThreadContext* ctx, const string& sandbox, json& vars, const string& threadname)
 {
     context_ = ctx;
+    terminate_.store (false);
     thread_ = std::thread ([this, &sandbox, &vars, threadname]() {
         this->set_threadname (threadname);
         this->OpenWindowsPipes (sandbox);
         auto stat = this->Execute (sandbox, vars);
         this->CloseWindowsPipes();
-        LINFO_IF (stat) << "<" << name_ << "> Finished.";
-        LERROR_IF (!stat) << "<" << name_ << "> Failed.";
+        LINFO_IF (stat && !terminate_.load()) << "<" << name_ << "> Finished.";
+        LWARN_IF (terminate_.load()) << "<" << name_ << "> Terminated.";
+        LERROR_IF (!stat && !terminate_.load()) << "<" << name_ << "> Failed.";
     });
 }
 
@@ -106,13 +108,15 @@ void
 Node::Start (NodeThreadContext* ctx, vector<string>& inputs, const string& sandbox, json& vars, const string& threadname)
 {
     context_ = ctx;
+    terminate_.store (false);
     thread_ = std::thread ([this, &inputs, &sandbox, &vars, threadname]() {
         this->set_threadname (threadname);
         this->OpenWindowsPipes (sandbox);
         auto stat = this->Execute (inputs, sandbox, vars);
         this->CloseWindowsPipes();
-        LINFO_IF (stat) << "<" << name_ << "> Finished.";
-        LERROR_IF (!stat) << "<" << name_ << "> Failed.";
+        LINFO_IF (stat && !terminate_.load()) << "<" << name_ << "> Finished.";
+        LWARN_IF (terminate_.load()) << "<" << name_ << "> Terminated.";
+        LERROR_IF (!stat && !terminate_.load()) << "<" << name_ << "> Failed.";
     });
 }
 
@@ -615,7 +619,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
         }
 
         DWORD eventIndex = waitResult - WAIT_OBJECT_0;
-        if (eventIndex >= read_events_.size()) {
+        if (eventIndex >= events.size()) {
             LERROR << LOGNODE << "Invalid index.";
             return -1;
         }
@@ -836,7 +840,6 @@ Node::Reset()
     eofs_ = 0;
     totalbytesread_ = 0;
     totalbyteswritten_ = 0;
-    terminate_.store (false);
 }
 
 int
