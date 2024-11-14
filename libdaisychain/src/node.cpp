@@ -412,11 +412,18 @@ Node::OpenWindowsPipes (const string& sandbox_)
         }
         else {
             LDEBUG << LOGNODE << "Connected to named pipe: " << pipename;
-            OVERLAPPED overlapped{0};
-            auto event = CreateEvent (nullptr, TRUE, FALSE, nullptr);
-            write_events_.push_back (event);
-            overlapped.hEvent = event;
-            overlapped_writes_.push_back (overlapped);
+            PipeInfo pipeInfo{};
+            pipeInfo.handle = fd_out_[fifo];
+
+            pipeInfo.event = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+            if (pipeInfo.event == nullptr) {
+                LERROR << LOGNODE << "Failed to create write event.";
+            }
+            else {
+                ZeroMemory (&pipeInfo.overlapped, sizeof(OVERLAPPED));
+                pipeInfo.overlapped.hEvent = pipeInfo.event;
+                write_events_.push_back (pipeInfo);
+            }
         }
     }
 
@@ -465,14 +472,12 @@ Node::OpenWindowsPipes (const string& sandbox_)
         // Create an event for each pipe
         pipeInfo.event = CreateEvent (nullptr, TRUE, FALSE, nullptr);
         if (pipeInfo.event == nullptr) {
-            LERROR << LOGNODE << "Failed to create event.";
+            LERROR << LOGNODE << "Failed to create read event.";
         }
         else {
             ZeroMemory (&pipeInfo.overlapped, sizeof(OVERLAPPED));
             pipeInfo.overlapped.hEvent = pipeInfo.event;
-
-            pipeinfos_.push_back (pipeInfo);
-            read_events_.push_back (pipeInfo.event);
+            read_events_.push_back (pipeInfo);
         }
     }
 
@@ -481,8 +486,6 @@ Node::OpenWindowsPipes (const string& sandbox_)
         LERROR << LOGNODE << "Failed to create event. Error: " << GetLastError();
         return;
     }
-
-    read_events_.push_back (terminate_event_);
 
     {
         std::unique_lock lock (context_->close_mutex_);
@@ -523,22 +526,21 @@ Node::CloseWindowsPipes()
         CloseHandle (handle);
     }
 
-    // The terminate_event_ HANDLE is the last element in read_events_
-    for (const auto& handle : read_events_) {
-        CloseHandle (handle);
+    for (const auto& pipeinfo: read_events_) {
+        CloseHandle (pipeinfo.event);
     }
 
-    for (const auto& handle : write_events_) {
-        CloseHandle (handle);
+    for (const auto& pipeinfo: write_events_) {
+        CloseHandle (pipeinfo.event);
     }
 
+    CloseHandle (terminate_event_);
     terminate_event_ = nullptr;
+
     fd_in_.clear();
     fd_out_.clear();
-    read_events_.clear();
     write_events_.clear();
-    overlapped_writes_.clear();
-    pipeinfos_.clear();
+    read_events_.clear();
     Reset();
 } // ClosePipes
 
@@ -557,7 +559,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
 
     size_t index = 0;
     // Issue asynchronous reads for all pipes before waiting for events
-    for (auto& pipeinfo : pipeinfos_) {
+    for (auto& pipeinfo : read_events_) {
         DWORD bytesread_ = 0;
         DWORD error;
         pipeinfo.message.resize (BUFFSIZE);
@@ -613,7 +615,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
         }
 
         DWORD eventIndex = waitResult - WAIT_OBJECT_0;
-        if (eventIndex >= pipeinfos_.size()) {
+        if (eventIndex >= read_events_.size()) {
             LERROR << LOGNODE << "Invalid index.";
             return -1;
         }
@@ -623,7 +625,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
             return -1;
         }
 
-        PipeInfo& pipeinfo = pipeinfos_[event_indices[eventIndex]];
+        PipeInfo& pipeinfo = read_events_[event_indices[eventIndex]];
 
         // Use GetOverlappedResult to confirm the read operation and get the number of bytes read
         DWORD error;
@@ -711,10 +713,10 @@ Node::WriteOutputs(const std::string& output)
     for (auto it = fd_out_.begin(); it != fd_out_.end(); ++it, ++index) {
         HANDLE handle = it->second;
 
-        overlapped_writes_[index].Offset = 0;
-        overlapped_writes_[index].OffsetHigh = 0;
+        write_events_[index].overlapped.Offset = 0;
+        write_events_[index].overlapped.OffsetHigh = 0;
 
-        ResetEvent (overlapped_writes_[index].hEvent);
+        ResetEvent (write_events_[index].event);
 
         // Issue the asynchronous write
         BOOL fSuccess = WriteFile(
@@ -722,7 +724,7 @@ Node::WriteOutputs(const std::string& output)
             token.data(),                     // Pointer to the buffer
             static_cast<DWORD>(token.size()), // Total size of the token to write
             &byteswritten[index],             // Immediate bytes written (if synchronous)
-            &overlapped_writes_[index]        // Overlapped structure for async
+            &write_events_[index].overlapped        // Overlapped structure for async
         );
 
         if (fSuccess) {
@@ -736,7 +738,7 @@ Node::WriteOutputs(const std::string& output)
             DWORD error = GetLastError();
             if (error == ERROR_IO_PENDING) {
                 // Write is pending, add the event handle to the list of events to wait for
-                events.push_back (overlapped_writes_[index].hEvent);
+                events.push_back (write_events_[index].event);
                 event_indices.push_back (index); // Map this event to the current index
             }
             else {
@@ -777,13 +779,13 @@ Node::WriteOutputs(const std::string& output)
         }
 
         if (eventIndex < event_indices.size()) {
-            size_t index = event_indices[eventIndex]; // Get the correct index for fd_out_ and overlapped_writes_
+            size_t index = event_indices[eventIndex];
             HANDLE handle = std::next (fd_out_.begin(), index)->second;
 
             DWORD dwWritten = 0;
             BOOL overlappedResult = GetOverlappedResult(
                 handle,
-                &overlapped_writes_[index],
+                &write_events_[index].overlapped,
                 &dwWritten,
                 FALSE
             );
@@ -800,7 +802,7 @@ Node::WriteOutputs(const std::string& output)
             FlushFileBuffers (handle);
             LDEBUG << LOGNODE << "Write completed asynchronously for pipe handle: " << handle;
 
-            ResetEvent (overlapped_writes_[index].hEvent);
+            ResetEvent (write_events_[index].event);
 
             // Adjust indices
             events.erase (events.begin() + eventIndex);

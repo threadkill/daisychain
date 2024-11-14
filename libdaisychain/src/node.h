@@ -227,13 +227,12 @@ protected:
         HANDLE handle{};
         OVERLAPPED overlapped{};
         HANDLE event{};
+        bool pending{false};
         std::string message;
     };
 
-    std::vector<PipeInfo> pipeinfos_;
-    std::vector<OVERLAPPED> overlapped_writes_;
-    std::vector<HANDLE> read_events_;
-    std::vector<HANDLE> write_events_;
+    std::vector<PipeInfo> read_events_;
+    std::vector<PipeInfo> write_events_;
     HANDLE terminate_event_{};
 
     map<const string, HANDLE> fd_in_;

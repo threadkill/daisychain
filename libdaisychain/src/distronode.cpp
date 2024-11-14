@@ -135,7 +135,7 @@ DistroNode::WriteNextOutput (const std::string& output) {
 
     while (written < token.size() && !terminate_.load()) {
         handle = fd_out_[*output_it_];  // Update handle for the current output
-        OVERLAPPED& overlapped_write = overlapped_writes_[std::distance(outputs_.begin(), output_it_)];
+        OVERLAPPED& overlapped_write = write_events_[std::distance(outputs_.begin(), output_it_)].overlapped;
 
         BOOL fSuccess = WriteFile(
             handle,
