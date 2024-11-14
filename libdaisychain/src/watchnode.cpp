@@ -577,8 +577,8 @@ WatchNode::Stop()
         stopwatching_ = true;
     }
     terminate_cv_.notify_all();
-    terminate_.store (true);
     modified_cv_.notify_all();
+    Node::Stop();
 } // WatchNode::Stop
 
 

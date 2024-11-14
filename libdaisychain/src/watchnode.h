@@ -58,12 +58,8 @@ public:
             modified_files_.pop();
         }
 #endif
-        eofs_ = 0;
-        totalbytesread_ = 0;
-        totalbyteswritten_ = 0;
-        fd_in_.clear();
-        fd_out_.clear();
         notifications_.clear();
+        Node::Reset();
     }
 
     bool passthru() const { return passthru_; }
