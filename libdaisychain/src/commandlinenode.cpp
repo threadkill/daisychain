@@ -461,7 +461,7 @@ CommandLineNode::shell_expand (const string& input)
 
 #else
 string
-CommandLineNode::shell_expand (const string& input) const
+CommandLineNode::shell_expand (const string& input)
 {
     wordexp_t p;
     char** w;
