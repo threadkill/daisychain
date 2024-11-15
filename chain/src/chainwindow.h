@@ -137,6 +137,8 @@ private:
     QTabWidget* tabs_{};
     LogWidget* logwidget_{};
     QDockWidget* loggerdock_{};
+    QStatusBar* statusbar_{};
+
     bool compact_;
     int sidewidth_;
     int bottomheight_;

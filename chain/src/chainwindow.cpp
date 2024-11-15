@@ -62,6 +62,13 @@ ChainWindow::ChainWindow() :
     view_ = views_[0];
     view_->setScene (scene_.get());
 
+    el::Helpers::installLogDispatchCallback<LogFilter>("LogFilter");
+    auto logfilter = el::Helpers::logDispatchCallback<LogFilter>("LogFilter");
+    logfilter->set_logfile (model_->graphLog());
+    logfilter->setEnabled (true);
+
+    statusbar_ = statusBar();
+
     setupInputsDialog();
     setupUI();
     updateSignals();
@@ -443,11 +450,13 @@ ChainWindow::setupUI()
     connect (envwidget, &EnvironWidget::environWidgetChanged, [&](json& data_) {
         model_->updateEnviron (data_);
     });
-
-    el::Helpers::installLogDispatchCallback<LogFilter>("LogFilter");
-    auto logfilter = el::Helpers::logDispatchCallback<LogFilter>("LogFilter");
-    logfilter->set_logfile (model_->graphLog());
-    logfilter->setEnabled (true);
+    connect (logwidget_, &QTextEdit::textChanged, [&]() {
+        QTextCursor cursor = logwidget_->textCursor();
+        cursor.movePosition (QTextCursor::End);
+        cursor.movePosition (QTextCursor::PreviousBlock);
+        QString lastline = cursor.block().text().trimmed();
+        statusbar_->showMessage (lastline);
+    });
 
     switchTab (0);
 } // ChainWindow::setupUI

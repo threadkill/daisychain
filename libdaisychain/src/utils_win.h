@@ -36,13 +36,9 @@ mkdtemp_ (const std::string& templateStr) {
         return "";
     }
 
-    bool success = false;
-
     // Try creating the directory with different random strings until it succeeds
-    for (int attempt = 0; attempt < 100; ++attempt) {
+    for (int attempt = 0; attempt < 10; ++attempt) {
         constexpr size_t maskLength = 6;
-        // Limit attempts to avoid infinite loop
-        // Generate a new random string
         std::string randomStr = generateRandomString (maskLength);
 
         // Replace the 'XXXXXX' mask with the random string
@@ -52,23 +48,18 @@ mkdtemp_ (const std::string& templateStr) {
         tempdir.replace (pos, maskLength, randomStr);
         temppath += tempdir;
 
-        // Try to create the directory
         if (CreateDirectoryA (temppath.c_str(), nullptr)) {
-            // Directory creation succeeded
-            success = true;
             return temppath;
-        } else if (GetLastError() == ERROR_ALREADY_EXISTS) {
-            // Directory already exists, retry with a different random string
-            continue;
-        } else {
-            // Some other error occurred
-            std::cerr << "Failed to create directory: " << GetLastError() << std::endl;
-            return "";
         }
+
+        if (GetLastError() == ERROR_ALREADY_EXISTS) {
+            continue;
+        }
+
+        break;
     }
 
-    // If we reach here, we failed to create a unique directory
-    std::cerr << "Failed to create a unique directory after multiple attempts." << std::endl;
+    std::cerr << "Failed to create a temp directory after multiple attempts." << std::endl;
     return "";
 }
 
@@ -98,19 +89,16 @@ DeleteDirectoryContents (const std::string& directory) {
             // Recursively delete the directory contents
             DeleteDirectoryContents(fullPath);
 
-            // Now delete the empty directory
             if (!RemoveDirectory (fullPath.c_str())) {
                 std::cerr << "Failed to remove directory: " << fullPath << " Error: " << GetLastError() << std::endl;
             }
-        } else {
-            // It's a file, so delete it
-            if (!DeleteFile (fullPath.c_str())) {
-                std::cerr << "Failed to delete file: " << fullPath << " Error: " << GetLastError() << std::endl;
-            }
+        }
+        else if (!DeleteFile (fullPath.c_str())) {
+            std::cerr << "Failed to delete file: " << fullPath << " Error: " << GetLastError() << std::endl;
         }
     } while (FindNextFile (hFind, &findFileData) != 0);
 
-    FindClose(hFind);
+    FindClose (hFind);
 }
 
 inline bool
