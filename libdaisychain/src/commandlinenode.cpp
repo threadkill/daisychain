@@ -65,16 +65,16 @@ CommandLineNode::Execute (vector<string>& inputs, const string& sandbox, json& e
 
     bool stat = true;
 
-    // prepare the shell environment
-    for (auto& [key, value] : env.items()) {
-        set_variable (key, value.get<string>());
-    }
-
 #ifndef _WIN32
     // prepare the shell environment
     for (auto& [key, value] : env.items()) {
         if (setenv (key.c_str(), shell_expand (value.get<string>()).c_str(), true) < 0)
             return false;
+    }
+#else
+    // prepare the shell environment
+    for (auto& [key, value] : env.items()) {
+        set_variable (key, value.get<string>());
     }
 #endif
 
@@ -461,7 +461,7 @@ CommandLineNode::shell_expand (const string& input)
 
 #else
 string
-Node::shell_expand (const string& input) const
+CommandLineNode::shell_expand (const string& input) const
 {
     wordexp_t p;
     char** w;

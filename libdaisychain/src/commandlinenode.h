@@ -80,7 +80,7 @@ private:
 
 #endif
 
-    string shell_expand (const string&);
+    [[nodiscard]] string shell_expand (const string&) const;
 
     string command_;
 
