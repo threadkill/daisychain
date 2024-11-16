@@ -566,6 +566,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
         if (pipeinfo.pending) {
             events.push_back (pipeinfo.overlapped.hEvent);
             event_indices.push_back (index);
+            ++index;
             continue;
         }
 
