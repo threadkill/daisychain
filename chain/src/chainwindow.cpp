@@ -263,6 +263,17 @@ ChainWindow::setupUI()
 {
     setGeometry (compactsize_);
 
+    auto statuslabel_ = new QLabel (
+        "<a href=\"https://github.com/threadkill/daisychain\">v" DAISYCHAIN_VERSION "</a>");
+    statuslabel_->setPalette (darkPalette());
+    statuslabel_->setTextInteractionFlags (Qt::TextBrowserInteraction);
+    statuslabel_->setOpenExternalLinks (true);
+    statuslabel_->setFocusPolicy (Qt::NoFocus);
+
+    statusbar_->addPermanentWidget (statuslabel_);
+    statusbar_->setPalette (darkPalette());
+    statusbar_->setContentsMargins (0, 0, 6, 0);
+
     logwidget_ = new LogWidget (model_->graphLog());
     logwidget_->setObjectName ("logger");
 
