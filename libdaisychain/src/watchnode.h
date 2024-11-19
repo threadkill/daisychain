@@ -45,12 +45,10 @@ public:
     void Reset() override
     {
 #ifdef _WIN32
-        stopwatching_ = false;
         only_files_ = false;
         only_dirs_ = false;
-        watch_handle_map_.clear();  // only directories can be watched on windows
         watch_files_.clear();       // explicitly watched files
-        watch_dirs_.clear();       // explicitly watched files
+        watch_dirs_.clear();        // explicitly watched files
         dirinfos_.clear();
         terminate_.store (false);
 
@@ -58,6 +56,7 @@ public:
             modified_files_.pop();
         }
 #endif
+        watch_fd_map_.clear();
         notifications_.clear();
         Node::Reset();
     }
@@ -75,7 +74,7 @@ private:
 
     bool Notify (const string& sandbox, const string& path);
 
-    [[noreturn]] void Monitor (const string& sandbox);
+    void Monitor (const string& sandbox);
 
     void RemoveWatches();
 
@@ -100,19 +99,14 @@ private:
     };
 
     HANDLE iocp_{}; // IO Completion Port HANDLE
-    map<string, HANDLE> watch_handle_map_;
     bool only_files_{};
     bool only_dirs_{};
     std::set<string> watch_files_;
     std::set<string> watch_dirs_;
     std::mutex modified_mutex_;
-    std::mutex terminate_mutex_;
     std::condition_variable modified_cv_;
-    std::condition_variable terminate_cv_;
     std::queue<string> modified_files_;
     std::vector<DirectoryInfo*> dirinfos_;
-    bool stopwatching_{};
-
 #endif
 };
 } // namespace daisychain

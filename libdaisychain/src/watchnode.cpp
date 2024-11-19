@@ -28,9 +28,6 @@ WatchNode::WatchNode() :
     passthru_ (false),
     recursive_ (false)
 {
-#ifdef _WIN32
-    stopwatching_ = false;
-#endif
     type_ = DaisyNodeType::DC_WATCH;
     batch_ = true;
     set_name (DaisyNodeNameByType[type_]);
@@ -510,7 +507,13 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         return false;
     }
 
-    std::vector<path> allpaths (inputs.begin(), inputs.end());
+    std::vector<path> allpaths;
+
+    for (const auto& input : inputs) {
+        if (input == "EOF") continue;
+        allpaths.emplace_back (input);
+    }
+
     for (const auto& path: allpaths) {
         if (is_regular_file (path)) {
             watch_files_.insert (path.string());
@@ -555,14 +558,14 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
         if (!inputs.empty() && inputs[inputs.size() - 1] == "EOF") {
             inputs.pop_back();
         }
-
         Monitor (sandbox);
     }
 
-    RemoveWatches();
     OpenOutputs (sandbox);
     WriteOutputs ("EOF");
     CloseOutputs();
+
+    RemoveWatches();
     Reset();
 
     return stat;
@@ -572,11 +575,6 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 void
 WatchNode::Stop()
 {
-    {
-        std::lock_guard<std::mutex> lock (terminate_mutex_);
-        stopwatching_ = true;
-    }
-    terminate_cv_.notify_all();
     modified_cv_.notify_all();
     Node::Stop();
 } // WatchNode::Stop
@@ -646,7 +644,6 @@ WatchNode::Notify (const string& sandbox, const string& path)
         return false;
     }
 
-    watch_handle_map_[path] = dirinfo->hDir;
     dirinfos_.push_back (dirinfo);
 
     return stat;
@@ -667,14 +664,13 @@ WatchNode::MonitorThread()
             overlapped,
             MAXIMUM_WAIT_OBJECTS,
             &num_removed,
-            500,
+            INFINITE,
             FALSE);
-
-        if (terminate_.load()) break;
 
         if (!success) {
             const DWORD error = GetLastError();
             if (error == WAIT_TIMEOUT) {
+                //LDEBUG << "Timed out waiting for completion";
                 continue; // Timeout reached, check for termination
             }
             LERROR << "GetQueuedCompletionStatusEx failed with error: " << error;
@@ -689,7 +685,7 @@ WatchNode::MonitorThread()
             DWORD bytes_transferred = overlapped[i].dwNumberOfBytesTransferred;
 
             if (lpOverlapped == nullptr && completionkey == 0) {
-                LERROR << "lpOverlapped is nullptr.";
+                LDEBUG << "lpOverlapped is nullptr. exiting monitor thread.";
                 break;
             }
 
@@ -779,7 +775,7 @@ WatchNode::MonitorThread()
             } while (notify->NextEntryOffset != 0 && !terminate_.load());
         }
 
-        if (!batch_modified_files.empty()) {
+        if (!batch_modified_files.empty() && !terminate_.load()) {
             std::lock_guard lock (modified_mutex_);
             for (const auto& filename : batch_modified_files) {
                 modified_files_.push (filename);
@@ -794,8 +790,8 @@ void
 WatchNode::Monitor (const std::string& sandbox)
 {
     SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    const auto numthreads = sysinfo.dwNumberOfProcessors;
+    GetSystemInfo (&sysinfo);
+    constexpr auto numthreads = 4; // sysinfo.dwNumberOfProcessors;
 
     std::vector<std::thread> threads;
 
@@ -803,42 +799,42 @@ WatchNode::Monitor (const std::string& sandbox)
         threads.emplace_back (&WatchNode::MonitorThread, this);
     }
 
-    while (!stopwatching_ && !terminate_.load()) {
+    while (!terminate_.load()) {
         std::unique_lock lock (modified_mutex_);
 
         modified_cv_.wait (lock, [this] {
-            return !modified_files_.empty() || stopwatching_;
+            return !modified_files_.empty() || terminate_.load();
         });
-
-        if (stopwatching_ || terminate_.load()) {
-            lock.unlock();
-            WriteOutputs ("EOF");
-            lock.lock();
-            break;
-        }
 
         if (!modified_files_.empty()) {
             auto filename = modified_files_.front();
             modified_files_.pop();
 
-            lock.unlock();
             WriteOutputs (filename);
-            lock.lock();
         }
+
+        lock.unlock ();
     }
 
-    for (unsigned int i = 0; i < numthreads; ++i) {
-        PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
+    for (auto i = 0; i < numthreads; ++i) {
+        auto stat = PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
+        LDEBUG << "PostQueuedCompletionStatus: " << stat;
     }
 
     for (auto& thread : threads) {
         if (thread.joinable()) {
             thread.join();
+            LDEBUG << "MonitorThread exited.";
         }
     }
 
-    RemoveWatches();
+    threads.clear();
+} // WatchNode::Monitor
 
+
+void
+WatchNode::RemoveWatches()
+{
     for (auto dirinfo : dirinfos_) {
         if (dirinfo->hDir != nullptr && dirinfo->hDir != INVALID_HANDLE_VALUE) {
             CloseHandle (dirinfo->hDir);
@@ -848,12 +844,6 @@ WatchNode::Monitor (const std::string& sandbox)
     }
 
     dirinfos_.clear();
-} // WatchNode::Monitor
-
-
-void
-WatchNode::RemoveWatches()
-{
     if (iocp_ != nullptr && iocp_ != INVALID_HANDLE_VALUE) {
         CloseHandle (iocp_);
     }
