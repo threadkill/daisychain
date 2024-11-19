@@ -45,12 +45,6 @@ jobs:
       - name: Rename Executable with Tag Version
         run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-win64.exe
 
-      - name: Install Cosign
-        run: choco install cosign -y
-
-      - name: Sign Executable with Keyless
-        run: cosign sign-blob --output-signature build/DaisyChain-win64.exe.sig build/DaisyChain-win64.exe
-
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
@@ -58,6 +52,5 @@ jobs:
           tag_name: ${{ github.event.inputs.tag }}
           files: |
             build/DaisyChain-win64.exe
-            build/DaisyChain-win64.exe.sig
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
