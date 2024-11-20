@@ -137,15 +137,6 @@ ChainWindow::setupMenu()
     font.setPixelSize (12);
     menubar->setFont (font);
 
-    // stopbtn
-    auto stopbtn = new QPushButton ("");
-    stopbtn->setPalette (darkPalette());
-    stopbtn->setObjectName ("stopbtn");
-    stopbtn->setIcon (QIcon (":stop.png"));
-    stopbtn->setDisabled (true);
-    stopbtn->setToolTip ("Terminate running graph.");
-    menubar->setCornerWidget (stopbtn);
-
     // graphmenu
     auto graphmenu = menubar->addMenu ("File");
     graphmenu->setPalette (darkPalette());
@@ -204,8 +195,6 @@ ChainWindow::setupMenu()
     notesaction->setShortcut (Qt::Key_N);
     viewmenu->addAction (notesaction);
     viewmenu->addAction (actions_["fit"]);
-
-    connect (stopbtn, &QPushButton::clicked, [&]() { model_->terminate(); });
 } // ChainWindow::setupMenu
 
 
@@ -324,7 +313,7 @@ ChainWindow::setupUI()
     auto winvlayout = new QVBoxLayout (central);
     winvlayout->setContentsMargins (0, 0, 0, 5);
 
-    auto envlabel = new QLabel ("Variables");
+    auto envlabel = new QLabel ("Global Variables");
     envlabel->setPalette (darkPalette());
     envlabel->setAlignment (Qt::AlignCenter);
     envlabel->setStyleSheet ("font-weight: bold;");
@@ -358,6 +347,26 @@ ChainWindow::setupUI()
     font = execbtn->font();
     font.setPixelSize (12);
     execbtn->setFont (font);
+    auto execgfx = new QGraphicsColorizeEffect();
+    execgfx->setColor (QColor (50, 120, 85));
+    execgfx->setStrength (1.0);
+    execbtn->setGraphicsEffect (execgfx);
+
+    auto termbtn = new QPushButton ("Terminate");
+    termbtn->setToolTip ("Terminate the current running graph.");
+    termbtn->setPalette (darkPalette());
+    termbtn->setObjectName ("termbtn");
+    termbtn->setFocusPolicy (Qt::NoFocus);
+    termbtn->setFixedHeight (32);
+    termbtn->setStyleSheet ("font-weight: bold;");
+    font = termbtn->font();
+    font.setPixelSize (12);
+    termbtn->setFont (font);
+    termbtn->hide();
+    auto termgfx = new QGraphicsColorizeEffect();
+    termgfx->setColor (QColor (200, 80, 80));
+    termgfx->setStrength (2.0);
+    termbtn->setGraphicsEffect (termgfx);
 
     auto testbtn = new QPushButton ("Test");
     testbtn->setToolTip ("Test input pass-through.");
@@ -388,6 +397,7 @@ ChainWindow::setupUI()
     execlayout->setContentsMargins (0, 0, 0, 0);
     execlayout->addWidget (filesbtn);
     execlayout->addWidget (execbtn);
+    execlayout->addWidget (termbtn);
     execlayout->addWidget (testbtn);
     execlayout->setStretchFactor (execbtn, 50);
     execlayout->insertSpacing (1, 1);
@@ -444,6 +454,7 @@ ChainWindow::setupUI()
     setupHud();
 
     connect (execbtn, &QPushButton::clicked, this, &ChainWindow::execute);
+    connect (termbtn, &QPushButton::clicked, [&]() { model_->terminate(); });
     connect (testbtn, &QPushButton::clicked, this, &ChainWindow::test);
     connect (filesbtn, &QPushButton::customContextMenuRequested, this, &ChainWindow::showSelectInputsContextMenu);
     connect (filesbtn, &QPushButton::clicked, this, &ChainWindow::selectInputs);
@@ -651,34 +662,33 @@ ChainWindow::switchTab (int index)
     logwidget_->setLogFile (model_->graphLog());
     updateTitle();
 
-    auto stopbtn = findChild<QPushButton*>("stopbtn");
+    auto termbtn = findChild<QPushButton*>("termbtn");
     auto execbtn = findChild<QPushButton*>("execbtn");
     auto testbtn = findChild<QPushButton*>("testbtn");
     auto filesbtn = findChild<QPushButton*>("filesbtn");
     if (model_ && model_->running()) {
-        stopbtn->hide();
-        stopbtn->setEnabled (true);
-        stopbtn->setText (tabs_->tabText (index));
-        stopbtn->show();
         filesbtn->setEnabled (false);
         execbtn->setEnabled (false);
+        execbtn->hide();
+        termbtn->setEnabled (true);
+        termbtn->show();
         testbtn->setEnabled (false);
         view_->setEnabled (false);
         auto gfx = new QGraphicsColorizeEffect();
         gfx->setColor (QColor (0, 0, 0));
         gfx->setStrength (1.0);
         view_->setGraphicsEffect(gfx);
+
     }
     else {
-        stopbtn->hide();
-        stopbtn->setEnabled (false);
-        stopbtn->setText ("");
-        stopbtn->show();
         filesbtn->setEnabled (true);
         execbtn->setEnabled (true);
+        execbtn->show();
+        termbtn->setEnabled (false);
+        termbtn->hide();
         testbtn->setEnabled (true);
         view_->setEnabled (true);
-        view_->setGraphicsEffect(nullptr);
+        view_->setGraphicsEffect (nullptr);
     }
 
     model_->emitAll();
