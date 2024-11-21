@@ -20,7 +20,9 @@ set (CMAKE_AUTORCC ON)
 # NodeEditor
 add_custom_target (apply_nodeeditor_patch
     COMMAND ${CMAKE_COMMAND} -E echo "Applying patch to NodeEditor..."
-    COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_SOURCE_DIR}/3rdparty git apply ${CMAKE_SOURCE_DIR}/patches/nodeeditor.patch
+    COMMAND git checkout nodeeditor/src/AbstractNodeGeometry.cpp
+    COMMAND git apply ${CMAKE_SOURCE_DIR}/patches/nodeeditor.patch
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/3rdparty
     COMMENT "Patching NodeEditor before building"
 )
 set (CMAKE_POLICY_DEFAULT_CMP0077 NEW)
