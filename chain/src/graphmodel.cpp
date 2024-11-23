@@ -493,8 +493,11 @@ GraphModel::test()
 void
 GraphModel::terminate()
 {
-    if (graph_->running()) {
+    if (running()) {
         graph_->Terminate();
+    }
+    while (running()) {
+        std::this_thread::sleep_for (std::chrono::milliseconds(100));
     }
 }
 

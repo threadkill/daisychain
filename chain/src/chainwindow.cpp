@@ -583,7 +583,7 @@ ChainWindow::newTab()
 void
 ChainWindow::closeTab()
 {
-    if (model_->graph()->running()) {
+    if (model_->running()) {
         auto button = QMessageBox::question (this, tr ("Daisy"), tr ("Graph is still running and will be terminated. Close anyway?"));
         if (button == QMessageBox::No) {
             return;
@@ -591,7 +591,7 @@ ChainWindow::closeTab()
     }
 
     blockSignals (true);
-    model_->graph()->Terminate();
+    model_->terminate();
     clearGraph();
 
     const auto index = tabs_->currentIndex();
@@ -1009,6 +1009,7 @@ ChainWindow::closeEvent (QCloseEvent* event)
         disconnect (tabs_, &QTabWidget::currentChanged, this, &ChainWindow::switchTab);
 
         for (const auto& model : models_) {
+            model->blockSignals (true);
             model->terminate();
         }
         event->accept();
