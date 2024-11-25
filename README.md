@@ -38,7 +38,7 @@ The project consists of the following components:
 1. *Batch processing* files typically requires writing the same type of boilerplate code in a scripting language over and over again (*i.e. option flags, loops constructs, exec calls to other applications, I/O handling, signal handling, etc*). DaisyChain replaces that process with a framework that controls the order of execution, **and provides a means to parallelize processes.**
 2. *Running scripts* requires some working knowledge of a terminal and shell syntax. DaisyChain encapsulates that
 process in a GUI application which does not require terminal interaction by users.
-3. It's easier to *distribute command-line tools* by encapsulating them in a graph along with their parameters.
+3. It's easier to *distribute tools* by encapsulating them in a graph along with their parameters.
 
 <br/>
 
