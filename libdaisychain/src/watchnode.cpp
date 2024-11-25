@@ -575,7 +575,8 @@ WatchNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
 void
 WatchNode::Stop()
 {
-    modified_cv_.notify_all();
+    auto stat = PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
+    LDEBUG << "PostQueuedCompletionStatus: " << stat;
     Node::Stop();
 } // WatchNode::Stop
 
@@ -649,12 +650,8 @@ WatchNode::Notify (const string& sandbox, const string& path)
 } // WatchNode::Notify
 
 
-void
-WatchNode::MonitorThread()
-{
+void WatchNode::Monitor (const std::string& sandbox) {
     ULONG num_removed = 0;
-
-    el::Helpers::setThreadName (threadname_);
 
     while (!terminate_.load()) {
         OVERLAPPED_ENTRY overlapped[MAXIMUM_WAIT_OBJECTS];
@@ -669,7 +666,6 @@ WatchNode::MonitorThread()
         if (!success) {
             const DWORD error = GetLastError();
             if (error == WAIT_TIMEOUT) {
-                //LDEBUG << "Timed out waiting for completion";
                 continue; // Timeout reached, check for termination
             }
             LERROR << "GetQueuedCompletionStatusEx failed with error: " << error;
@@ -684,18 +680,13 @@ WatchNode::MonitorThread()
             DWORD bytes_transferred = overlapped[i].dwNumberOfBytesTransferred;
 
             if (lpOverlapped == nullptr && completionkey == 0) {
-                LDEBUG << "lpOverlapped is nullptr. exiting monitor thread.";
-                break;
+                // Exit signal via PostQueuedCompletionStatus in Stop().
+                LDEBUG << "Exiting Monitor().";
+                return;
             }
 
             auto* dirinfo = reinterpret_cast<DirectoryInfo*>(completionkey);
-            if (dirinfo == nullptr) {
-                LERROR << "dirinfo is nullptr.";
-                continue;
-            }
-
-            if (bytes_transferred == 0) {
-                LDEBUG << "Zero bytes transferred.";
+            if (dirinfo == nullptr || bytes_transferred == 0) {
                 continue;
             }
 
@@ -706,7 +697,7 @@ WatchNode::MonitorThread()
                 dirinfo->buffer,
                 BUFFER_SIZE,
                 TRUE,
-                FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
+                FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_LAST_WRITE,
                 nullptr,
                 &dirinfo->overlapped,
                 nullptr);
@@ -729,21 +720,18 @@ WatchNode::MonitorThread()
                         transmit = !only_files_;
                         break;
                     case FILE_ACTION_REMOVED:
-                        LDEBUG << "File removed: ";
                         break;
                     case FILE_ACTION_MODIFIED:
                         LDEBUG << "File modified: ";
                         transmit = true;
                         break;
                     case FILE_ACTION_RENAMED_OLD_NAME:
-                        LDEBUG << "File renamed (old name): ";
                         break;
                     case FILE_ACTION_RENAMED_NEW_NAME:
                         LDEBUG << "File renamed (new name): ";
                         transmit = !only_files_;
                         break;
                     default:
-                        LDEBUG << "Unknown action: ";
                         break;
                 }
 
@@ -753,84 +741,28 @@ WatchNode::MonitorThread()
                     auto fs_path = path (dirinfo->directoryPath) /
                         path (notify->FileName, notify->FileName + notify->FileNameLength / sizeof(WCHAR));
 
-                    if (is_directory (fs_path)) {
-                        continue;
+                    if (!is_regular_file (fs_path)) {
+                        continue; // Skip directories
                     }
 
                     auto fullpathstr = fs_path.string();
-
-                    if (only_files_) {
-                        if (!watch_files_.contains (fullpathstr)) {
-                            continue;
-                        }
-                    }
-
-                    {
-                        // Time-based filtering of duplicates
-                        //std::lock_guard lock (notification_mutex_);
-                        auto now = std::chrono::steady_clock::now();
-                        auto it = notifications_.find (fullpathstr);
-                        if (it == notifications_.end() || (now - it->second) >= debounce_time) {
-                            notifications_[fullpathstr] = now;
-                            batch_modified_files.push_back (fullpathstr);
-                        }
+                    auto now = std::chrono::steady_clock::now();
+                    auto it = notifications_.find (fullpathstr);
+                    if (it == notifications_.end() || (now - it->second) >= debounce_time) {
+                        notifications_[fullpathstr] = now;
+                        batch_modified_files.push_back (fullpathstr);
                     }
                 }
             } while (notify->NextEntryOffset != 0 && !terminate_.load());
         }
 
         if (!batch_modified_files.empty() && !terminate_.load()) {
-            std::lock_guard lock (modified_mutex_);
             for (const auto& filename : batch_modified_files) {
-                modified_files_.push (filename);
+                WriteOutputs (filename);
             }
-            modified_cv_.notify_one();
         }
     }
-} // WatchNode::MonitorThread
-
-
-void
-WatchNode::Monitor (const std::string& sandbox)
-{
-    constexpr auto numthreads = 1;
-    std::vector<std::thread> threads;
-
-    for (unsigned int i = 0; i < numthreads; ++i) {
-        threads.emplace_back (&WatchNode::MonitorThread, this);
-    }
-
-    while (!terminate_.load()) {
-        std::unique_lock lock (modified_mutex_);
-
-        modified_cv_.wait (lock, [this] {
-            return !modified_files_.empty() || terminate_.load();
-        });
-
-        if (!modified_files_.empty()) {
-            auto filename = modified_files_.front();
-            modified_files_.pop();
-
-            WriteOutputs (filename);
-        }
-
-        lock.unlock ();
-    }
-
-    for (auto i = 0; i < numthreads; ++i) {
-        auto stat = PostQueuedCompletionStatus (iocp_, 0, 0, nullptr);
-        LDEBUG << "PostQueuedCompletionStatus: " << stat;
-    }
-
-    for (auto& thread : threads) {
-        if (thread.joinable()) {
-            thread.join();
-            LDEBUG << "MonitorThread exited.";
-        }
-    }
-
-    threads.clear();
-} // WatchNode::Monitor
+}
 
 
 void

@@ -88,8 +88,6 @@ private:
     std::chrono::milliseconds debounce_time = std::chrono::milliseconds (2000);
 
 #ifdef _WIN32
-    void MonitorThread();
-
     #define BUFFER_SIZE (1024 * 64)
     struct DirectoryInfo {
         std::string directoryPath;
@@ -103,9 +101,6 @@ private:
     bool only_dirs_{};
     std::set<string> watch_files_;
     std::set<string> watch_dirs_;
-    std::mutex modified_mutex_;
-    std::mutex notification_mutex_;
-    std::condition_variable modified_cv_;
     std::queue<string> modified_files_;
     std::vector<DirectoryInfo*> dirinfos_;
 #endif
