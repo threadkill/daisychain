@@ -632,8 +632,7 @@ WatchNode::Notify (const string& sandbox, const string& path)
         dirinfo->buffer,
         BUFFER_SIZE,
         recursive_, // Monitor subdirectories
-        FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-        FILE_NOTIFY_CHANGE_SIZE      | FILE_NOTIFY_CHANGE_LAST_WRITE,
+        FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
         nullptr,
         &dirinfo->overlapped,
         nullptr);
@@ -696,6 +695,7 @@ WatchNode::MonitorThread()
             }
 
             if (bytes_transferred == 0) {
+                LDEBUG << "Zero bytes transferred.";
                 continue;
             }
 
@@ -706,8 +706,7 @@ WatchNode::MonitorThread()
                 dirinfo->buffer,
                 BUFFER_SIZE,
                 TRUE,
-                FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME |
-                FILE_NOTIFY_CHANGE_SIZE      | FILE_NOTIFY_CHANGE_LAST_WRITE,
+                FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_SIZE | FILE_NOTIFY_CHANGE_LAST_WRITE,
                 nullptr,
                 &dirinfo->overlapped,
                 nullptr);
@@ -748,30 +747,35 @@ WatchNode::MonitorThread()
                         break;
                 }
 
-                if (transmit) {
-                    std::wstring wfilename (notify->FileName, notify->FileNameLength / sizeof(WCHAR));
-                    auto filename = wchar2string (wfilename.c_str());
+                offset += notify->NextEntryOffset;
 
-                    auto fullpath = dirinfo->directoryPath + "/" + filename;
+                if (transmit) {
+                    auto fs_path = path (dirinfo->directoryPath) /
+                        path (notify->FileName, notify->FileName + notify->FileNameLength / sizeof(WCHAR));
+
+                    if (is_directory (fs_path)) {
+                        continue;
+                    }
+
+                    auto fullpathstr = fs_path.string();
 
                     if (only_files_) {
-                        if (!watch_files_.contains (fullpath)) {
+                        if (!watch_files_.contains (fullpathstr)) {
                             continue;
                         }
                     }
 
-                    LDEBUG << fullpath;
-
-                    // Time-based filtering of duplicates
-                    auto now = std::chrono::steady_clock::now();
-                    auto it = notifications_.find (filename);
-                    if (it == notifications_.end() || (now - it->second) >= debounce_time) {
-                        notifications_[filename] = now;
-                        batch_modified_files.push_back (filename);
+                    {
+                        // Time-based filtering of duplicates
+                        //std::lock_guard lock (notification_mutex_);
+                        auto now = std::chrono::steady_clock::now();
+                        auto it = notifications_.find (fullpathstr);
+                        if (it == notifications_.end() || (now - it->second) >= debounce_time) {
+                            notifications_[fullpathstr] = now;
+                            batch_modified_files.push_back (fullpathstr);
+                        }
                     }
                 }
-
-                offset += notify->NextEntryOffset;
             } while (notify->NextEntryOffset != 0 && !terminate_.load());
         }
 
@@ -789,10 +793,7 @@ WatchNode::MonitorThread()
 void
 WatchNode::Monitor (const std::string& sandbox)
 {
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo (&sysinfo);
-    constexpr auto numthreads = 4; // sysinfo.dwNumberOfProcessors;
-
+    constexpr auto numthreads = 1;
     std::vector<std::thread> threads;
 
     for (unsigned int i = 0; i < numthreads; ++i) {

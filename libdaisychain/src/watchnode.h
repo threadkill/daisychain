@@ -104,6 +104,7 @@ private:
     std::set<string> watch_files_;
     std::set<string> watch_dirs_;
     std::mutex modified_mutex_;
+    std::mutex notification_mutex_;
     std::condition_variable modified_cv_;
     std::queue<string> modified_files_;
     std::vector<DirectoryInfo*> dirinfos_;

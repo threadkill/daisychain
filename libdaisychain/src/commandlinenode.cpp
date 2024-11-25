@@ -214,7 +214,7 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
     }
 
     // Log the command line for debugging
-    LDEBUG << LOGNODE << "Executing command line: " << shell_expand ("echo \"" + command_ + "\"");
+    LDEBUG << LOGNODE << "Executing command line: " << shell_expand (command_);
 
     std::string std_out;
     stat = run_cmdexe (command_, std_out);
