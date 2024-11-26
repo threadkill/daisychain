@@ -50,4 +50,6 @@ public Q_SLOTS:
     void updateGraphicsObject (QtNodes::NodeId);
 
     void updatePositions();
+
+    QMenu* createSceneMenu (QPointF scenePos) override;
 };

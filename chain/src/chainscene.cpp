@@ -15,8 +15,10 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #include "chainscene.h"
-#include <QtWidgets/QGraphicsObject>
+
 #include <QtWidgets/QFileDialog>
+#include <QtWidgets/QGraphicsObject>
+#include <QtWidgets/QTreeWidget>
 
 
 ChainScene::ChainScene (GraphModel* model, QWidget* parent) :
@@ -92,4 +94,17 @@ ChainScene::updatePositions()
         auto obj = reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(id));
         graph_->updatePosition (id, obj->scenePos());
     }
+}
+
+
+QMenu*
+ChainScene::createSceneMenu (QPointF const scenePos)
+{
+    QMenu *modelMenu = DataFlowGraphicsScene::createSceneMenu (scenePos);
+    if (auto* treeView = modelMenu->findChild<QTreeView*>()) {
+        treeView->setSortingEnabled(true);
+        treeView->sortByColumn (0, Qt::AscendingOrder);
+    }
+
+    return modelMenu;
 }
