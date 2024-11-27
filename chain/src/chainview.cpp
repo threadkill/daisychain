@@ -25,6 +25,12 @@
 ChainView::ChainView() : GraphicsView()
 {
     setAcceptDrops (true);
+
+    dragndrop_label_ = new QLabel ("Drag-n-Drop\n Input Files", this);
+    dragndrop_label_->setStyleSheet ("color: rgba(255,255,255,32); background-color: rgba(0,0,0,0);");
+    dragndrop_label_->setFont (QFont("Arial", 32, QFont::Bold));
+    dragndrop_label_->adjustSize();
+    dragndrop_label_->setAttribute (Qt::WA_TransparentForMouseEvents);
 }
 
 
@@ -32,6 +38,12 @@ void ChainView::setScene (ChainScene* chainscene)
 {
     GraphicsView::setScene (chainscene);
     connect (chainscene, &ChainScene::nodeContextMenu, this, &ChainView::createRenameContextMenu);
+
+    connect (dynamic_cast<GraphModel*>(&chainscene->graphModel()), &GraphModel::inputUpdated, [&] {
+        const auto _chainscene = dynamic_cast<ChainScene*>(scene());
+        const auto _model = dynamic_cast<GraphModel*>(&_chainscene->graphModel());
+        dragndrop_label_->setVisible (_model->input().empty());
+    });
 }
 
 void
@@ -112,6 +124,7 @@ ChainView::dropEvent (QDropEvent* event)
         if (!paths.empty()) {
             auto input = model->input();
             model->updateInput (input+paths);
+            dragndrop_label_->hide();
         }
 
         if (!graph.isEmpty()) {
@@ -154,4 +167,15 @@ ChainView::keyReleaseEvent (QKeyEvent *event)
         auto _scene = reinterpret_cast<ChainScene*> (this->scene());
         _scene->updatePositions();
     }
+}
+
+
+void
+ChainView::resizeEvent (QResizeEvent* event)
+{
+    GraphicsView::resizeEvent (event);
+
+    int x = (viewport()->width() - dragndrop_label_->width()) / 2;
+    int y = (viewport()->height() - dragndrop_label_->height()) / 2;
+    dragndrop_label_->move (x, y);
 }

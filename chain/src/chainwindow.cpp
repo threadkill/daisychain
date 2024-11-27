@@ -23,12 +23,12 @@ registerDataModels()
 {
     auto ret = std::make_shared<NodeDelegateModelRegistry>();
 
-    ret->registerModel<CommandModel>("");
-    ret->registerModel<ConcatModel>("");
-    ret->registerModel<DistroModel>("");
-    ret->registerModel<FileListModel>("");
-    ret->registerModel<FilterModel>("");
-    ret->registerModel<WatchModel>("");
+    ret->registerModel<CommandModel>("Execution");
+    ret->registerModel<ConcatModel>("Propagation");
+    ret->registerModel<DistroModel>("Propagation");
+    ret->registerModel<FileListModel>("Input");
+    ret->registerModel<FilterModel>("Input");
+    ret->registerModel<WatchModel>("Input");
 
     return ret;
 } // registerDataModels
@@ -98,6 +98,8 @@ ChainWindow::setupActions()
     actions_["copy"] = new QAction ("Copy", this);
     actions_["paste"] = new QAction ("Paste", this);
     actions_["cleargraph"] = new QAction ("Clear", this);
+    actions_["wiki"] = new QAction ("Wiki", this);
+    actions_["about"] = new QAction ("About", this);
 
     actions_["fit"]->setShortcut (Qt::Key_F);
     actions_["compact"]->setShortcut (Qt::Key_C);
@@ -117,14 +119,32 @@ ChainWindow::setupActions()
     connect (actions_["fit"], &QAction::triggered, this, &ChainWindow::fitInView);
     connect (actions_["compact"], &QAction::toggled, this, &ChainWindow::showGraph);
 
-    connect (actions_["print"], &QAction::triggered, [&]() { model_->print(); });
+    connect (actions_["print"], &QAction::triggered, [&] { model_->print(); });
 
-    connect (actions_["copy"], &QAction::triggered, [&]() { view_->onCopySelectedObjects(); });
-    connect (actions_["paste"], &QAction::triggered, [&]() {
+    connect (actions_["copy"], &QAction::triggered, [&] { view_->onCopySelectedObjects(); });
+    connect (actions_["paste"], &QAction::triggered, [&] {
         view_->onPasteObjects();
         scene_->updatePositions();
     });
     connect (actions_["cleargraph"], &QAction::triggered, this, &ChainWindow::clearGraph);
+    connect (actions_["wiki"], &QAction::triggered, [&] {
+        if (const QUrl url ("https://github.com/threadkill/daisychain/wiki");
+            !QDesktopServices::openUrl (url)) {
+            qWarning ("Failed to open URL: %s", qPrintable (url.toString()));
+        }
+    });
+    connect (actions_["about"], &QAction::triggered, [&] {
+        QMessageBox aboutBox (this);
+        aboutBox.setWindowTitle ("About");
+        QString versionString = "Version: " DAISYCHAIN_VERSION;
+        QPixmap pixmap (":daisy_alpha_64.png");
+        if (!pixmap.isNull()) {
+            aboutBox.setIconPixmap (pixmap.scaled (100, 100, Qt::KeepAspectRatio));
+        }
+        aboutBox.setText ("<h3>DaisyChain</h3>" + versionString +
+                         "<p>A node-based dependency graph for file processing.</p>");
+        aboutBox.exec();
+    });
 } // ChainWindow::setupActions
 
 
@@ -195,6 +215,12 @@ ChainWindow::setupMenu()
     notesaction->setShortcut (Qt::Key_N);
     viewmenu->addAction (notesaction);
     viewmenu->addAction (actions_["fit"]);
+
+    auto helpmenu = menubar->addMenu ("Help");
+    helpmenu->setPalette (darkPalette());
+    helpmenu->setFont (font);
+    helpmenu->addAction (actions_["wiki"]);
+    helpmenu->addAction (actions_["about"]);
 } // ChainWindow::setupMenu
 
 

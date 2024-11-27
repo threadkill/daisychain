@@ -64,6 +64,8 @@ protected Q_SLOTS:
 
     void dragMoveEvent (QDragMoveEvent*) override;
 
+    void resizeEvent (QResizeEvent*) override;
+
 private:
 
     void keyReleaseEvent (QKeyEvent*) override;
@@ -71,4 +73,5 @@ private:
     QMenu* renameMenu_{};
     QLineEdit* renameTxt_{};
     QAction* renameAction_{};
+    QLabel* dragndrop_label_{};
 };
