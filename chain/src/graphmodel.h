@@ -50,7 +50,9 @@ class GraphModel : public QtNodes::DataFlowGraphModel
 public:
     explicit GraphModel (std::shared_ptr<QtNodes::NodeDelegateModelRegistry> registry);
 
-    void loadGraph (QString& filename, bool import = false);
+    void loadGraphJSON (const json& json_graph);
+
+    void loadGraph (const QString& filename, bool import = false);
 
     void saveGraph (QString& filename);
 

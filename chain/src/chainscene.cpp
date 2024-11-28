@@ -16,6 +16,8 @@
 
 #include "chainscene.h"
 
+#include "chainstyles.h"
+
 #include <QtWidgets/QFileDialog>
 #include <QtWidgets/QGraphicsObject>
 #include <QtWidgets/QTreeWidget>
@@ -100,11 +102,13 @@ ChainScene::updatePositions()
 QMenu*
 ChainScene::createSceneMenu (QPointF const scenePos)
 {
-    QMenu *modelMenu = DataFlowGraphicsScene::createSceneMenu (scenePos);
-    if (auto* treeView = modelMenu->findChild<QTreeView*>()) {
-        treeView->setSortingEnabled(true);
-        treeView->sortByColumn (0, Qt::AscendingOrder);
+    QMenu *menu = DataFlowGraphicsScene::createSceneMenu (scenePos);
+    menu->setPalette (darkPalette());
+
+    if (auto* treeview = menu->findChild<QTreeView*>()) {
+        treeview->setSortingEnabled (true);
+        treeview->sortByColumn (0, Qt::AscendingOrder);
     }
 
-    return modelMenu;
+    return menu;
 }

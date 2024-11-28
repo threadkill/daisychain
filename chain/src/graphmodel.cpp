@@ -264,7 +264,55 @@ GraphModel::saveGraph (QString& filename)
 
 
 void
-GraphModel::loadGraph (QString& filename, bool import)
+GraphModel::loadGraphJSON (const json& json_graph)
+{
+    graph_->Parse (json_graph);
+    Q_EMIT (clearSelection());
+
+    disconnect (this, &DataFlowGraphModel::nodeCreated, this, &GraphModel::addDaisyNode);
+
+    for (const auto& [id, node] : graph_->nodes()) {
+        auto nid = createNodeFromNode (node);
+        if (nid >= 0) {
+            Q_EMIT (nodeUpdated (nid));
+        }
+    }
+
+    connect (this, &DataFlowGraphModel::nodeCreated, this, &GraphModel::addDaisyNode);
+    disconnect (this, &DataFlowGraphModel::connectionCreated, this, &GraphModel::connectDaisyNode);
+
+    for (const auto& edge : graph_->edges()) {
+        auto node = graph_->nodes().at (edge.second);
+        auto connection_str = edge.first + "." + edge.second;
+        auto indices_map = node->input_indices();
+        auto indices = indices_map[connection_str];
+
+        QtNodes::ConnectionId connection_id = {uuid2nodeid_[edge.first], 0, uuid2nodeid_[edge.second], 0};
+
+        for (auto index : indices) {
+            connection_id = {uuid2nodeid_[edge.first], 0, uuid2nodeid_[edge.second], index};
+            if (!connectionExists (connection_id)) {
+                break;
+            }
+        }
+
+        if (connectionPossible (connection_id)) {
+            addConnection (connection_id);
+        }
+
+        if (!connectionExists (connection_id)) {
+            disconnectDaisyNode (connection_id);
+        }
+    }
+
+    connect (this, &DataFlowGraphModel::connectionCreated, this, &GraphModel::connectDaisyNode);
+
+    emitAll();
+} // GraphModel::loadGraphJSON
+
+
+void
+GraphModel::loadGraph (const QString& filename, bool import)
 {
     if (!QFileInfo::exists (filename)) {
         return;
@@ -294,18 +342,10 @@ GraphModel::loadGraph (QString& filename, bool import)
     disconnect (this, &DataFlowGraphModel::nodeCreated, this, &GraphModel::addDaisyNode);
 
     for (const auto& [id, node] : graph_->nodes()) {
-        // skip pre-existing nodes (as a result of an import).
-        /*
-        if (nodes().count (QUuid (QString::fromStdString (id)))) {
-            continue;
-        }
-         */
-
         auto nid = createNodeFromNode (node);
         if (nid >= 0) {
             Q_EMIT (nodeUpdated (nid));
         }
-
     }
 
     if (!import) {
@@ -313,7 +353,6 @@ GraphModel::loadGraph (QString& filename, bool import)
     }
 
     connect (this, &DataFlowGraphModel::nodeCreated, this, &GraphModel::addDaisyNode);
-
     disconnect (this, &DataFlowGraphModel::connectionCreated, this, &GraphModel::connectDaisyNode);
 
     for (const auto& edge : graph_->edges()) {

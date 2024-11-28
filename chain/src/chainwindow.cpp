@@ -93,7 +93,11 @@ ChainWindow::setupActions()
     actions_["clearinputs"]->setIcon (QIcon::fromTheme ("delete"));
     actions_["files"] = new QAction ("Show", this);
     actions_["fit"] = new QAction ("Fit view", this);
+    actions_["fit"]->setShortcut (Qt::Key_F);
     actions_["compact"] = new QAction ("Compact", this);
+    actions_["compact"]->setShortcut (Qt::Key_C);
+    actions_["compact"]->setCheckable (true);
+    actions_["compact"]->setChecked (false);
     actions_["print"] = new QAction ("Print", this);
     actions_["copy"] = new QAction ("Copy", this);
     actions_["paste"] = new QAction ("Paste", this);
@@ -101,10 +105,6 @@ ChainWindow::setupActions()
     actions_["wiki"] = new QAction ("Wiki", this);
     actions_["about"] = new QAction ("About", this);
 
-    actions_["fit"]->setShortcut (Qt::Key_F);
-    actions_["compact"]->setShortcut (Qt::Key_C);
-    actions_["compact"]->setCheckable (true);
-    actions_["compact"]->setChecked (false);
 
     connect (actions_["newtab"], &QAction::triggered, this, &ChainWindow::newTab);
     connect (actions_["close"], &QAction::triggered, this, qOverload<>(&ChainWindow::closeTab));
@@ -118,9 +118,7 @@ ChainWindow::setupActions()
     connect (actions_["files"], &QAction::triggered, this, &ChainWindow::showInputs);
     connect (actions_["fit"], &QAction::triggered, this, &ChainWindow::fitInView);
     connect (actions_["compact"], &QAction::toggled, this, &ChainWindow::showGraph);
-
     connect (actions_["print"], &QAction::triggered, [&] { model_->print(); });
-
     connect (actions_["copy"], &QAction::triggered, [&] { view_->onCopySelectedObjects(); });
     connect (actions_["paste"], &QAction::triggered, [&] {
         view_->onPasteObjects();
@@ -575,6 +573,17 @@ ChainWindow::updateSignals()
 
 
 void
+ChainWindow::keyReleaseEvent (QKeyEvent* event)
+{
+    if (event->key() == Qt::Key_V && (event->modifiers() & Qt::ControlModifier)) {
+        onPaste();
+    }
+    QMainWindow::keyPressEvent (event);
+}
+
+
+
+void
 ChainWindow::newTab()
 {
     auto model = std::make_shared<GraphModel> (registry_);
@@ -1015,6 +1024,30 @@ ChainWindow::dropEvent (QDropEvent* event)
 {
     view_->droppedFromWindow (event);
 } // ChainWindow::dropEvent
+
+
+void
+ChainWindow::onPaste()
+{
+    QClipboard *clipboard = QApplication::clipboard();
+    auto clipboardText = clipboard->text();
+
+    if (!clipboardText.isEmpty()) {
+        try {
+            auto text = clipboardText.toStdString();
+            auto data = nlohmann::json::parse (text);
+            if (data.contains ("nodes") && data.contains ("notes")) {
+                model_->loadGraphJSON (data);
+                fitInView();
+                clipboard->setMimeData (new QMimeData());
+                clipboard->clear();
+                return;
+            }
+        }
+        catch (nlohmann::json::parse_error &e) {
+        }
+    }
+}
 
 
 void

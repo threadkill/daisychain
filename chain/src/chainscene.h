@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "chainstyles.h"
 #include "graphmodel.h"
 #include "graph.h"
 #include <QtNodes/NodeDelegateModelRegistry>

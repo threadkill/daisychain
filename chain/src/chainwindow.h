@@ -61,6 +61,8 @@ private:
 
     void updateSignals();
 
+    void keyReleaseEvent (QKeyEvent*) override;
+
 private Q_SLOTS:
 
     void newTab();
@@ -106,6 +108,8 @@ private Q_SLOTS:
     void dragEnterEvent (QDragEnterEvent*) override;
 
     void dropEvent (QDropEvent*) override;
+
+    void onPaste();
 
     void closeEvent (QCloseEvent*) override;
 
