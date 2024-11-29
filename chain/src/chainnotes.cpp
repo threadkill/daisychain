@@ -20,10 +20,10 @@
 
 
 ChainNotes::ChainNotes (QWidget* parent) :
-    QTextEdit (parent)
+    QPlainTextEdit (parent)
 {
     setupUI();
-    setText ("");
+    setPlainText ("");
     setPlaceholderText ("Notes are saved with the graph.");
 }
 
@@ -45,7 +45,7 @@ json
 ChainNotes::serialize()
 {
     json notes;
-    notes["text"] = QTextEdit::toPlainText().toStdString();
+    notes["text"] = QPlainTextEdit::toPlainText().toStdString();
 
     return notes;
 } // ChainNotes::serialize

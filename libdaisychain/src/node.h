@@ -195,6 +195,7 @@ public:
     static void concat_inputs (vector<string>& inputs)
     {
         // drop EOF and concatenate inputs into a newline-separated string.
+        std::sort (inputs.begin(), inputs.end());
         string input = m_join_if (inputs, "\n", [] (const std::string& s) { return (s != "EOF"); });
 
         // still using the vector, but now there's only a single element with combined string.

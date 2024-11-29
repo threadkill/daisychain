@@ -16,8 +16,7 @@
 
 #pragma once
 
-#include <QtWidgets/QTextEdit>
-#include <QtWidgets/QVBoxLayout>
+#include <QtWidgets/QPlainTextEdit>
 
 #include "chainmodel.h"
 
@@ -45,5 +44,5 @@ public:
     bool resizable() const override { return true; }
 
 private:
-    QTextEdit* _textEdit;
+    QPlainTextEdit* _textEdit;
 };

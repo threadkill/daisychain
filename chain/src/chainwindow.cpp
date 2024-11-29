@@ -232,7 +232,7 @@ ChainWindow::setupInputsDialog()
     inputsdialog_->setPalette (darkPalette());
     inputsdialog_->setSizeGripEnabled (true);
 
-    auto textedit = new QTextEdit (inputsdialog_);
+    auto textedit = new QPlainTextEdit (inputsdialog_);
     textedit->setPalette (darkPalette());
 
     textedit->setObjectName ("dialogtextedit");
@@ -241,9 +241,9 @@ ChainWindow::setupInputsDialog()
     textedit->setStyleSheet (QString::fromStdString (chainScrollBarQss));
 
     textedit->setContextMenuPolicy (Qt::CustomContextMenu);
-    connect (textedit, &QTextEdit::customContextMenuRequested, this, &ChainWindow::showInputsContextMenu);
-    connect (textedit, &QTextEdit::textChanged, [&]() {
-        const auto textedit_ = inputsdialog_->findChild<QTextEdit*> ("dialogtextedit");
+    connect (textedit, &QPlainTextEdit::customContextMenuRequested, this, &ChainWindow::showInputsContextMenu);
+    connect (textedit, &QPlainTextEdit::textChanged, [&]() {
+        const auto textedit_ = inputsdialog_->findChild<QPlainTextEdit*> ("dialogtextedit");
         auto paths = textedit_->toPlainText().toStdString();
         model_->blockSignals (true);
         model_->updateInput (paths);
@@ -488,7 +488,7 @@ ChainWindow::setupUI()
         newTab();
         load (filename);
     });
-    connect (noteswidget, &QTextEdit::textChanged, [&]() {
+    connect (noteswidget, &QPlainTextEdit::textChanged, [&]() {
         auto widget = findChild<ChainNotes*> ("noteswidget");
         auto notes = widget->serialize();
         model_->updateNotes (notes);
@@ -935,10 +935,10 @@ ChainWindow::updateInputs()
 {
     const auto input = model_->input();
 
-    const auto textedit = inputsdialog_->findChild<QTextEdit*> ("dialogtextedit");
+    const auto textedit = inputsdialog_->findChild<QPlainTextEdit*> ("dialogtextedit");
     textedit->blockSignals (true);
     textedit->clear();
-    textedit->setText (QString::fromStdString (input));
+    textedit->setPlainText (QString::fromStdString (input));
     textedit->blockSignals (false);
 
     const auto btn = findChild<QWidget*> ("filesbtn");
@@ -971,7 +971,7 @@ ChainWindow::showInputs()
 void
 ChainWindow::showInputsContextMenu (const QPoint& pt)
 {
-    auto textedit = inputsdialog_->findChild<QTextEdit*> ("dialogtextedit");
+    auto textedit = inputsdialog_->findChild<QPlainTextEdit*> ("dialogtextedit");
     auto clearaction = new QAction ("Clear Inputs", textedit);
     clearaction->setIconVisibleInMenu (true);
     clearaction->setIcon (QIcon::fromTheme ("delete"));

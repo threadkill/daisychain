@@ -42,7 +42,7 @@ CommandModel::load (QJsonObject const &_json)
     QJsonValue val = _json["command"];
     if (!val.isUndefined()) {
         auto output = val.toString();
-        _textEdit->setText (output);
+        _textEdit->setPlainText (output);
     }
 }
 
@@ -63,23 +63,23 @@ CommandModel::embeddedWidget()
                                       "\nBy default, OUTPUT=${INPUT}. This can be changed below. "
                                       "\nShell variable expansion rules apply.";
 #endif
-        _textEdit = new QTextEdit ("");
+        _textEdit = new QPlainTextEdit ("");
         _textEdit->setParent (_widget);
         _textEdit->setObjectName ("_textEdit");
         _textEdit->setPlaceholderText (placeholdertext.c_str());
         _textEdit->setFont (chain::chainfont());
-        _textEdit->setTextColor (QColor (69, 165, 117));
         _textEdit->setMinimumWidth (350);
         _textEdit->setMinimumHeight (100);
         _textEdit->setSizePolicy (QSizePolicy (QSizePolicy::Minimum, QSizePolicy::Ignored));
 
         auto palette = _textEdit->palette();
         palette.setColor (QPalette::Base, QColor (0, 0, 0));
+        palette.setColor (QPalette::Text, QColor (69, 165, 117));
         _textEdit->setPalette (palette);
 
         _layout->insertWidget (0, _textEdit);
 
-        connect (_textEdit, &QTextEdit::textChanged, this, &CommandModel::onChanged);
+        connect (_textEdit, &QPlainTextEdit::textChanged, this, &CommandModel::onChanged);
 
         _textEdit->resize (350, 100);
     }

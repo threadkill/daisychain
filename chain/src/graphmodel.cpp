@@ -418,7 +418,7 @@ GraphModel::createNodeFromNode (const std::shared_ptr<daisychain::Node>& node)
         datamodel = delegateModel<ChainModel>(qtnode);
         datamodel->setNodeName (name);
         auto widget = datamodel->embeddedWidget();
-        widget->findChild<QTextEdit*> ("_textEdit")->setText (cmd);
+        widget->findChild<QPlainTextEdit*> ("_textEdit")->setPlainText (cmd);
         widget->findChild<QLineEdit*> ("_outputEdit")->setText (outputfile);
         widget->findChild<QCheckBox*> ("_batchChk")->setChecked (batch);
     } break;

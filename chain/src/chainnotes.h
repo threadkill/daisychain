@@ -15,14 +15,14 @@
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 #pragma once
-#include <QTextEdit>
+#include <QPlainTextEdit>
 #include <nlohmann/json.hpp>
 
 
 using json = nlohmann::ordered_json;
 
 
-class ChainNotes : public QTextEdit
+class ChainNotes : public QPlainTextEdit
 {
     Q_OBJECT
 
