@@ -19,7 +19,7 @@
 #include <QtConcurrent/QtConcurrent>
 #include <QtCore/QJsonValue>
 #include <QtWidgets/QFileDialog>
-#include <QtWidgets/QTextEdit>
+#include <QtWidgets/QPlainTextEdit>
 #include <utility>
 #include <fstream>
 
@@ -155,7 +155,7 @@ GraphModel::updateDaisyNode (NodeDelegateModel* datamodel)
 
     if (datamodel->name() == "Shell Command") {
         std::string cmd = datamodel->embeddedWidget()
-                              ->findChild<QTextEdit*> ("_textEdit")
+                              ->findChild<QPlainTextEdit*> ("_textEdit")
                               ->toPlainText()
                               .toStdString();
         std::string outputfile = datamodel->embeddedWidget()
