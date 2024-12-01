@@ -37,7 +37,7 @@ void
 ChainBrowser::setupUI()
 {
     auto graph_dir
-        = QProcessEnvironment::systemEnvironment().value ("DAISY_GRAPH_DIR", QDir::homePath());
+        = QProcessEnvironment::systemEnvironment().value ("DAISYCHAIN_GRAPHS", QDir::homePath());
 
     setVerticalScrollBarPolicy (Qt::ScrollBarAlwaysOff);
 
