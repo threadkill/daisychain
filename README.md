@@ -172,6 +172,6 @@ Additional information can be found on the [wiki](https://github.com/threadkill/
 
 ## Examples<a id='examples'></a>
 
-There is a separate [repository](https://github.com/threadkill/daisychain-graphs) with some example graphs. The [wiki](https://github.com/threadkill/daisychain-graphs/wiki) outlines usage.
+There is a separate [repository](https://github.com/threadkill/daisychain-graphs) with some example graphs. This repository has its own [wiki](https://github.com/threadkill/daisychain-graphs/wiki) outlining graph usage.
 
 <br/>
