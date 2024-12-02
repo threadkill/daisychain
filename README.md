@@ -35,7 +35,7 @@ The project consists of the following components:
 <br/>
 
 ## Why?<a id='why'></a>
-Fundamentally, it's easier/quicker to author command-line tools than GUI-based tools for simple file-processing tasks. DaisyChain just provides some basic GUI conveniences for those tools while adding the ability to parallelize certain tasks.
+Creating command-line tools is often faster than developing GUI-based tools for simple file-processing tasks, but it typically sacrifices user-friendliness. DaisyChain just provides some basic GUI conveniences for those tools while adding the ability to parallelize certain tasks.
 
 1. *Batch processing* files typically requires writing the same type of boilerplate code in a scripting language over and over again (*i.e. option flags, loops constructs, exec calls to other applications, I/O handling, signal handling, etc*). DaisyChain replaces that process with a framework that controls the order of execution, **and provides a means to parallelize processes.**
 2. *Running scripts* requires some working knowledge of a terminal and shell syntax. DaisyChain encapsulates that
