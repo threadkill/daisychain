@@ -55,12 +55,14 @@ CommandModel::embeddedWidget()
         _widget->setObjectName ("commandmodel");
 
 #ifdef _WIN32
-        std::string placeholdertext = "Globals are accessible as environment variables."
-                                      "\nBy default, OUTPUT=%INPUT%. This can be changed below. "
+        std::string placeholdertext = "Global variables are accessible as environment variables."
+                                      "\nBy default, OUTPUT=%INPUT%."
+                                      "\nWhen OUTPUT is set below, it can be referenced as %OUTPUT% by the command."
                                       "\nShell variable expansion rules apply.";
 #else
-        std::string placeholdertext = "Globals are accessible as environment variables."
-                                      "\nBy default, OUTPUT=${INPUT}. This can be changed below. "
+        std::string placeholdertext = "Global variables are accessible as environment variables."
+                                      "\nBy default, OUTPUT=${INPUT}."
+                                      "\nWhen OUTPUT is set below, it can be referenced as %OUTPUT% by the command."
                                       "\nShell variable expansion rules apply.";
 #endif
         _textEdit = new QPlainTextEdit ("");

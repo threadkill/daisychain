@@ -46,10 +46,13 @@ ChainScene::updateGraphicsObject (const NodeId qtnode)
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
             "Shell Command:\n"
             " - Executes any command-line program in a shell environment.\n"
-            " - Shell variables can be passed in using the variables panel.\n"
+            " - Shell variables can be passed in using the global variables panel.\n"
             " - When batch is checked, execution is deferred until all inputs are read.\n"
             " - Batched inputs are concatenated into a single, newline-separated string.\n"
-            " - Output field can be set to ${STDOUT} to capture output from a command.");
+            " - BASENAME variable (filename only) is defined for each input automatically.\n"
+            " - SANDBOX variable is the location used for logs and temp files.\n"
+            " - STDOUT variable is captured automatically if a program writes to stdout."
+            );
     }
     else if (datamodel->name() == "Filter") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
@@ -66,12 +69,14 @@ ChainScene::updateGraphicsObject (const NodeId qtnode)
     else if (datamodel->name() == "Distro") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
             "Distro:\n"
-            " - Distributes inputs evenly across outputs (round-robin).");
+            " - Distributes inputs across multiple outputs (round-robin).\n"
+            " - Skips busy outputs and continously scans for ready outputs."
+            );
     }
     else if (datamodel->name() == "FileList") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
             "FileList:\n"
-            " - Sets output based on the contents of the input file.");
+            " - Reads the contents of the input file and writes outputs line-by-line.");
     }
     else if (datamodel->name() == "Watch") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
@@ -80,7 +85,7 @@ ChainScene::updateGraphicsObject (const NodeId qtnode)
             " - Recursively watches directories for file changes.\n"
             " - Writes changed files to output.\n"
             " - 'Passthru' processes all inputs before enabling watch.\n"
-            " - Execution continues until program exit.");
+            " - Execution continues until termination or program exit.");
     }
 
     reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setSelected (true);
