@@ -344,6 +344,7 @@ ChainWindow::setupUI()
     font = envlabel->font();
     font.setPixelSize (12);
     envlabel->setFont (font);
+    envlabel->setToolTip ("Variables accessible by all nodes.");
 
     auto envpix = QPixmap (":daisy_alpha_24.png");
 
