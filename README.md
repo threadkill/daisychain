@@ -11,10 +11,10 @@
 2. [Why?](#why)
 3. [How?](#how)
 4. [Downloads](#downloads)
-5. [Examples](#examples)
-6. [Building](#building)
-7. [Development](#development)
-8. [daisy --help](#daisyhelp)
+5. [Building](#building)
+6. [Development](#development)
+7. [Wiki](#wiki)
+8. [Examples](#examples)
 
 <br/>
 <br/>
@@ -80,12 +80,6 @@ __Notes__ can be stored with the graph and displayed in the GUI.
 ## Downloads<a id='downloads'></a>
 
 Binaries are currently available for [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe) and  [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg).
-
-<br/>
-
-## Examples<a id='examples'></a>
-
-There is a separate [repository](https://github.com/threadkill/daisychain-graphs) with some example graphs. The [wiki](https://github.com/threadkill/daisychain-graphs/wiki) outlines usage.
 
 <br/>
 
@@ -170,50 +164,14 @@ node name to be sure you're in the exact node you're trying to debug.
 
 <br/>
 
-## daisy --help<a id='daisyhelp'></a>
+## Wiki<a id='wiki'></a>
+
+Additional information can be found on the [wiki](https://github.com/threadkill/daisychain/wiki).
 
 <br/>
 
-```text
-DaisyChain - node-based dependency graph for file processing.
-   
-USAGE:
+## Examples<a id='examples'></a>
 
-   ./daisy  [-l <level>] [--stdin] [--keep] [-e <key=value>] ... [-s
-            <sandbox directory>] -g <graph *.dcg> [--] [--version] [-h]
-            <filename> ...
+There is a separate [repository](https://github.com/threadkill/daisychain-graphs) with some example graphs. The [wiki](https://github.com/threadkill/daisychain-graphs/wiki) outlines usage.
 
-
-Where:
-
-   -l <level>,  --loglevel <level>
-     off, info, warn, error, debug
-
-   --stdin
-     read from STDIN
-
-   --keep
-     keep sandbox
-
-   -e <key=value>,  --environ <key=value>  (accepted multiple times)
-     Shell variables inherited by the execution process.
-
-   -s <sandbox directory>,  --sandbox <sandbox directory>
-     Working directory used for I/O and available as a shell variable
-     during execution ${SANDBOX}.
-
-   -g <graph *.dcg>,  --graph <graph *.dcg>
-     (required)  DaisyChain graph file to execute.
-
-   --,  --ignore_rest
-     Ignores the rest of the labeled arguments following this flag.
-
-   --version
-     Displays version information and exits.
-
-   -h,  --help
-     Displays usage information and exits.
-
-   <filename>  (accepted multiple times)
-     Inputs (typically files).
-```
+<br/>
