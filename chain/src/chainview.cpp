@@ -83,7 +83,7 @@ ChainView::createRenameContextMenu (const QtNodes::NodeId node, const QPointF po
     });
 
     connect (renameTxt_, &QLineEdit::editingFinished, [&]() {
-        auto _scene = reinterpret_cast<DataFlowGraphicsScene*> (this->scene());
+        auto _scene = dynamic_cast<DataFlowGraphicsScene*> (this->scene());
         auto _model = dynamic_cast<GraphModel*>(&_scene->graphModel());
         auto _delegate = _model->delegateModel<ChainModel>(node);
         auto text = renameTxt_->text();
