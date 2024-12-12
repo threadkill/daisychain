@@ -403,7 +403,7 @@ WatchNode::Notify (const string& sandbox, const string& path)
 
 #define BUF_LEN (100 * (sizeof (struct inotify_event) + NAME_MAX + 1))
 
-[[noreturn]] void
+void
 WatchNode::Monitor (const string& sandbox)
 {
     struct pollfd pfds[1];
