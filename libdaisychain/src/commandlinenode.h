@@ -33,6 +33,11 @@ public:
 
     json Serialize() override;
 
+    void Reset() override {
+        environment_.clear();
+        Node::Reset();
+    }
+
     void set_command (const string& cmd);
 
     string command();
