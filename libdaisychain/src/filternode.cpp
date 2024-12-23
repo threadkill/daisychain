@@ -102,7 +102,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                 match = std::regex_match (input, expr);
             }
 #ifdef _WIN32
-            else if (PathMatchSpec (input.c_str(), filter_.c_str())) {
+            else if (PathMatchSpecEx (input.c_str(), filter_.c_str(), PMSF_NORMAL)) {
 #else
             else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
 #endif
@@ -130,7 +130,7 @@ FilterNode::Execute (vector<string>& inputs, const string& sandbox, json& vars)
                         match = std::regex_match (input, expr);
                     }
 #ifdef _WIN32
-                    else if (PathMatchSpec (input.c_str(), filter_.c_str())) {
+                    else if (PathMatchSpecEx (input.c_str(), filter_.c_str(), PMSF_NORMAL)) {
 #else
                     else if (fnmatch (filter_.c_str(), input.c_str(), FNM_PERIOD | FNM_EXTMATCH) == 0) {
 #endif
