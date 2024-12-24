@@ -622,7 +622,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
         events.push_back (terminate_event_);
 
         // If all reads are pending, wait indefinitely for the first signaled.
-        const DWORD wait_time = all_pending ? INFINITE : 1000;
+        const DWORD wait_time = all_pending ? INFINITE : 10;
 
         // Wait for ANY of the named pipes to signal they have data
         waitResult = WaitForMultipleObjects(
@@ -720,6 +720,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
 void
 Node::WriteOutputs(const std::string& output)
 {
+    //TIMED_SCOPE (timerObj, LOGNODE);
     if (terminate_.load())
         return;
 
