@@ -559,11 +559,16 @@ Node::ReadInputs (std::vector<std::string>& inputs)
     std::vector<HANDLE> events;          // Events for overlapped writes to wait for
     std::vector<size_t> event_indices;   // Map events to indices in fd_out_
     string input;
-
     size_t index = 0;
+    bool pending = false;
+
     // Issue asynchronous reads for all pipes before waiting for events
     for (auto& pipeinfo : read_events_) {
+        if (pipeinfo.finished) {
+            continue;
+        }
         if (pipeinfo.pending) {
+            pending = true;
             events.push_back (pipeinfo.overlapped.hEvent);
             event_indices.push_back (index);
             ++index;
@@ -580,6 +585,7 @@ Node::ReadInputs (std::vector<std::string>& inputs)
 
             if (!stat) {
                 if (error == ERROR_IO_PENDING) { // Async read initiated
+                    pending = true;
                     pipeinfo.pending = true;
                     events.push_back (pipeinfo.overlapped.hEvent);
                     event_indices.push_back (index);
@@ -602,30 +608,21 @@ Node::ReadInputs (std::vector<std::string>& inputs)
             }
         } while (bytesread_ == BUFFSIZE && error == ERROR_MORE_DATA); // Loop while filled
 
+        if (input.ends_with ("EOF\n")) {
+            pipeinfo.finished = true;
+        }
+
         ++index;
     }
 
-    bool pending = true;
-    if (ranges::all_of (read_events_, [](const PipeInfo& pipe) { return !pipe.pending; })) {
-        pending = false;
-    }
-
-    DWORD waitResult{0};
-
     if (pending) {
-        bool all_pending = false;
-        if (events.size() == read_events_.size()) {
-            all_pending = true;
-        }
-
         // Add termination event to the stack
         events.push_back (terminate_event_);
 
-        // If all reads are pending, wait indefinitely for the first signaled.
-        const DWORD wait_time = all_pending ? INFINITE : 10;
+        DWORD wait_time = (events.size() - 1) == read_events_.size() ? INFINITE : 1000;
 
         // Wait for ANY of the named pipes to signal they have data
-        waitResult = WaitForMultipleObjects(
+        DWORD waitResult = WaitForMultipleObjects(
             static_cast<DWORD>(events.size()),  // Number of events
             events.data(),                      // Array of event handles
             FALSE,                              // Wait for any event
@@ -701,10 +698,15 @@ Node::ReadInputs (std::vector<std::string>& inputs)
                     LDEBUG << LOGNODE << "Asynchronous bytes read: " << bytesread_;
                 }
             }
+
+            if (input.ends_with ("EOF\n")) {
+                pipeinfo.finished = true;
+                pipeinfo.pending = false;
+            }
         }
     }
 
-    m_split_input (input, inputs);
+    m_split_input (input, inputs);  // splits on newline
 
     if (auto count = ranges::count (inputs, "EOF")) {
         eofs_ += static_cast<int>(count);
@@ -720,7 +722,6 @@ Node::ReadInputs (std::vector<std::string>& inputs)
 void
 Node::WriteOutputs(const std::string& output)
 {
-    //TIMED_SCOPE (timerObj, LOGNODE);
     if (terminate_.load())
         return;
 

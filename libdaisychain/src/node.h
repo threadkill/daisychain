@@ -229,6 +229,7 @@ protected:
         OVERLAPPED overlapped{};
         HANDLE event{};
         bool pending{false};
+        bool finished{false};
         std::string message;
     };
 
