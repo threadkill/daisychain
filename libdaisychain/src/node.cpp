@@ -598,8 +598,10 @@ Node::ReadInputs (std::vector<std::string>& inputs)
     };
 
     for (auto& pipeinfo : read_events_) {
-        if (pipeinfo.finished)
+        if (pipeinfo.finished) {
+            ++index;
             continue;
+        }
         if (!pipeinfo.pending) {
             if (readPipe (pipeinfo) < 0)
                 return -1;
