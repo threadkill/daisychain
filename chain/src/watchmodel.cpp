@@ -87,8 +87,8 @@ WatchModel::embeddedWidget()
 
         _layout->addLayout (hlayout);
 
-        connect (_passthruChk, &QCheckBox::stateChanged, this, &WatchModel::onChanged);
-        connect (_recursiveChk, &QCheckBox::stateChanged, this, &WatchModel::onChanged);
+        connect (_passthruChk, &QCheckBox::checkStateChanged, this, &WatchModel::onChanged);
+        connect (_recursiveChk, &QCheckBox::checkStateChanged, this, &WatchModel::onChanged);
     }
 
     return _widget;

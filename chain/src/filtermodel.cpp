@@ -107,8 +107,8 @@ FilterModel::embeddedWidget()
         _widget->setMaximumHeight (50);
 
         connect (_lineEdit, &QLineEdit::textChanged, this, &FilterModel::onChanged);
-        connect (_regexChk, &QCheckBox::stateChanged, this, &FilterModel::onChanged);
-        connect (_invertChk, &QCheckBox::stateChanged, this, &FilterModel::onChanged);
+        connect (_regexChk, &QCheckBox::checkStateChanged, this, &FilterModel::onChanged);
+        connect (_invertChk, &QCheckBox::checkStateChanged, this, &FilterModel::onChanged);
     }
 
     return _widget;

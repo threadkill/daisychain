@@ -105,7 +105,7 @@ ChainModel::embeddedWidget()
         _layout->setContentsMargins (0, 0, 0, 0);
         _layout->insertLayout (0, _hlayout);
 
-        connect (_batchChk, &QCheckBox::stateChanged, this, &ChainModel::onChanged);
+        connect (_batchChk, &QCheckBox::checkStateChanged, this, &ChainModel::onChanged);
         connect (_outputEdit, &QLineEdit::textChanged, this, &ChainModel::onChanged);
     }
 
