@@ -1,24 +1,18 @@
 [submodule "3rdparty/easyloggingpp"]
 	path = 3rdparty/easyloggingpp
 	url = https://github.com/amrayn/easyloggingpp.git
-	branch = master
-[submodule "3rdparty/json"]
-	path = 3rdparty/nlohmann_json
-	url = https://github.com/nlohmann/json.git
-	branch = master
-[submodule "3rdparty/pybind11"]
-	path = 3rdparty/pybind11
-	url = https://github.com/pybind/pybind11.git
-	branch = master
-[submodule "3rdparty/pybind11_json"]
-	path = 3rdparty/pybind11_json
-	url = https://github.com/pybind/pybind11_json.git
-	branch = master
-[submodule "3rdparty/tclap"]
-	path = 3rdparty/tclap
-	url = https://git.code.sf.net/p/tclap/code
-	branch = master
 [submodule "3rdparty/nodeeditor"]
 	path = 3rdparty/nodeeditor
 	url = https://github.com/paceholder/nodeeditor.git
-	branch = master
+[submodule "3rdparty/tclap"]
+	path = 3rdparty/tclap
+	url = https://git.code.sf.net/p/tclap/code
+[submodule "3rdparty/pybind11_json"]
+	path = 3rdparty/pybind11_json
+	url = https://github.com/pybind/pybind11_json.git
+[submodule "3rdparty/pybind11"]
+	path = 3rdparty/pybind11
+	url = https://github.com/pybind/pybind11.git
+[submodule "3rdparty/nlohmann_json"]
+	path = 3rdparty/nlohmann_json
+	url = https://github.com/nlohmann/json.git
