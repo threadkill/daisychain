@@ -1,6 +1,6 @@
-diff a/nodeeditor/src/AbstractNodeGeometry.cpp b/nodeeditor/src/AbstractNodeGeometry.cpp
---- a/nodeeditor/src/AbstractNodeGeometry.cpp
-+++ b/nodeeditor/src/AbstractNodeGeometry.cpp
+diff a/src/AbstractNodeGeometry.cpp b/src/AbstractNodeGeometry.cpp
+--- a/src/AbstractNodeGeometry.cpp
++++ b/src/AbstractNodeGeometry.cpp
 @@ -19,10 +19,8 @@ QRectF AbstractNodeGeometry::boundingRect(NodeId const nodeId) const
  {
      QSize s = size(nodeId);
