@@ -20,6 +20,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.tag }}  # Checkout the specified tag
+          submodules: recursive
 
       # Install dependencies (Homebrew and Qt6)
       - name: Install Homebrew
