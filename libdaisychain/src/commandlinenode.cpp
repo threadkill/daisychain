@@ -345,21 +345,16 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
 {
     std::string cmdLine = "cmd.exe /C \"call " + command + "\"";
 
-    STARTUPINFOA si;
+    STARTUPINFOEXA si;
     PROCESS_INFORMATION pi;
     SECURITY_ATTRIBUTES sa;
+    ZeroMemory (&si, sizeof (si));
+    ZeroMemory (&pi, sizeof (pi));
 
-    ZeroMemory (&si, sizeof(si));
-    si.cb = sizeof(si);
-    si.dwFlags |= STARTF_USESTDHANDLES;
-
-    ZeroMemory (&pi, sizeof(pi));
-
-    sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-    sa.bInheritHandle = FALSE;
+    sa.nLength = sizeof (SECURITY_ATTRIBUTES);
+    sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    // Create pipes for STDOUT and STDERR
     HANDLE hStdOutRead = nullptr;
     HANDLE hStdOutWrite = nullptr;
 
@@ -368,28 +363,59 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
         return false;
     }
 
-    // Redirect both STDOUT and STDERR to the same pipe
-    si.hStdOutput = hStdOutWrite;
-    si.hStdError = hStdOutWrite;
-    si.hStdInput = nullptr; // No need to send any input
+    SIZE_T attrListSize = 0;
+    InitializeProcThreadAttributeList (nullptr, 1, 0, &attrListSize);
+    si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc (GetProcessHeap(), 0, attrListSize);
+    if (!si.lpAttributeList) {
+        CloseHandle (hStdOutRead);
+        CloseHandle (hStdOutWrite);
+        return false;
+    }
+
+    if (!InitializeProcThreadAttributeList (si.lpAttributeList, 1, 0, &attrListSize)) {
+        HeapFree (GetProcessHeap(), 0, si.lpAttributeList);
+        CloseHandle (hStdOutRead);
+        CloseHandle (hStdOutWrite);
+        return false;
+    }
+
+    HANDLE handlesToInherit[] = {hStdOutWrite};
+    if (!UpdateProcThreadAttribute (si.lpAttributeList,
+                                    0,
+                                    PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
+                                    handlesToInherit,
+                                    sizeof (handlesToInherit),
+                                    nullptr,
+                                    nullptr)) {
+        DeleteProcThreadAttributeList (si.lpAttributeList);
+        HeapFree (GetProcessHeap(), 0, si.lpAttributeList);
+        CloseHandle (hStdOutRead);
+        CloseHandle (hStdOutWrite);
+        return false;
+    }
+
+    si.StartupInfo.cb = sizeof (STARTUPINFOEXA);
+    si.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+    si.StartupInfo.hStdOutput = hStdOutWrite;
+    si.StartupInfo.hStdError = hStdOutWrite;
+    si.StartupInfo.hStdInput = nullptr;
 
     auto env = get_environment();
 
-    // Create the process
-    BOOL result = CreateProcessA(
-        nullptr,
-        &cmdLine[0],      // Command line
-        nullptr,          // Process security attributes
-        nullptr,          // Primary thread security attributes
-        false,            // Handles are not inherited
-        CREATE_NO_WINDOW, // Creation flags (hide the window)
-        env.data(),       // Use parent's environment
-        nullptr,          // Use parent's current directory
-        &si,
-        &pi
-    );
+    BOOL result = CreateProcessA (nullptr,
+                                  &cmdLine[0],
+                                  nullptr,
+                                  nullptr,
+                                  TRUE,
+                                  EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW,
+                                  env.data(),
+                                  nullptr,
+                                  &si.StartupInfo,
+                                  &pi);
 
     CloseHandle (hStdOutWrite);
+    DeleteProcThreadAttributeList (si.lpAttributeList);
+    HeapFree (GetProcessHeap(), 0, si.lpAttributeList);
 
     if (!result) {
         LERROR << LOGNODE << "CreateProcess failed with error " << GetLastError();
@@ -401,18 +427,15 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
     char buffer[bufferSize];
     DWORD bytesRead;
 
-    // Read until there is no more data
     while (true) {
         BOOL success = ReadFile (hStdOutRead, buffer, bufferSize - 1, &bytesRead, nullptr);
         if (!success) {
             DWORD error = GetLastError();
             if (error == ERROR_BROKEN_PIPE) {
-                // Child process has closed the pipe (normal termination)
-                break;
-            } else {
-                LERROR << LOGNODE << "ReadFile failed with error " << error;
                 break;
             }
+            LERROR << LOGNODE << "ReadFile failed with error " << error;
+            break;
         }
         if (bytesRead > 0) {
             buffer[bytesRead] = '\0';
@@ -433,7 +456,7 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
     CloseHandle (pi.hThread);
 
     return (exitCode == 0);
-} // CommandLineNode::run_cmdexe
+}
 
 
 string
