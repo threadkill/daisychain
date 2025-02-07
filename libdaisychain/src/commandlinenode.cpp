@@ -356,7 +356,7 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
     ZeroMemory (&pi, sizeof(pi));
 
     sa.nLength = sizeof(SECURITY_ATTRIBUTES);
-    sa.bInheritHandle = TRUE;
+    sa.bInheritHandle = FALSE;
     sa.lpSecurityDescriptor = nullptr;
 
     // Create pipes for STDOUT and STDERR
@@ -367,9 +367,6 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
         LERROR << LOGNODE << "Failed to create pipe for STDOUT. " << GetLastError();
         return false;
     }
-
-    // Ensure the read handle is not inherited
-    SetHandleInformation (hStdOutRead, HANDLE_FLAG_INHERIT, 0);
 
     // Redirect both STDOUT and STDERR to the same pipe
     si.hStdOutput = hStdOutWrite;
@@ -384,7 +381,7 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
         &cmdLine[0],      // Command line
         nullptr,          // Process security attributes
         nullptr,          // Primary thread security attributes
-        true,             // Handles are inherited
+        false,            // Handles are not inherited
         CREATE_NO_WINDOW, // Creation flags (hide the window)
         env.data(),       // Use parent's environment
         nullptr,          // Use parent's current directory
