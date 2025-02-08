@@ -81,7 +81,7 @@ __Notes__ can be stored with the graph and displayed in the GUI.
 
 ## Downloads<a id='downloads'></a>
 
-Binaries are currently available for [Windows10+ (x86_64)](https://github.com/threadkill/daisychain/releases/download/win-latest/DaisyChain-win-latest-win64.exe) and  [macOS-13+ (arm64)](https://github.com/threadkill/daisychain/releases/download/macos-latest/DaisyChain-macos-latest.dmg).
+Binaries are currently available for Windows10+ (x86_64)] and  macOS-13+ (arm64) on the [Releases page](https://github.com/threadkill/daisychain/releases).
 
 <br/>
 
