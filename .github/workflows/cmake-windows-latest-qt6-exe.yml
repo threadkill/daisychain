@@ -16,9 +16,10 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout master branch
         uses: actions/checkout@v3
         with:
+          ref: master  # Ensure we always build from master
           fetch-depth: 0  # Ensure full history is fetched
           submodules: recursive
 
@@ -33,7 +34,7 @@ jobs:
           git tag -d ${{ github.event.inputs.tag }} || true
           git push origin --delete ${{ github.event.inputs.tag }} || true
 
-      - name: Recreate tag
+      - name: Recreate and push new tag
         run: |
           git tag ${{ github.event.inputs.tag }}
           git push origin ${{ github.event.inputs.tag }}
