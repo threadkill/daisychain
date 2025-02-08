@@ -6,7 +6,6 @@ on:
 env:
   BUILD_TYPE: Release
   ALIAS_BRANCH: windows-latest
-  TEMP_TAG: windows-latest-$(date +%Y%m%d-%H%M%S)  # Create a versioned tag dynamically
 
 jobs:
   build-and-release:
@@ -25,10 +24,15 @@ jobs:
           git branch -f ${{ env.ALIAS_BRANCH }} master
           git push origin ${{ env.ALIAS_BRANCH }}
 
+      - name: Wait for branch to sync (prevent race condition)
+        run: sleep 5  # Ensure branch push is completed before tagging
+
       - name: Create a temporary versioned tag
         run: |
-          git tag ${{ env.TEMP_TAG }} ${{ env.ALIAS_BRANCH }}
-          git push origin ${{ env.TEMP_TAG }}
+          TEMP_TAG=windows-latest-$(date +%Y%m%d-%H%M%S)
+          echo "TEMP_TAG=$TEMP_TAG" >> $GITHUB_ENV
+          git tag $TEMP_TAG ${{ env.ALIAS_BRANCH }}
+          git push origin $TEMP_TAG
 
       - name: Set up Qt
         uses: jurplel/install-qt-action@v3
@@ -61,7 +65,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Delete old `windows-latest*` tags to prevent clutter
+      - name: Delete old `windows-latest-*` tags to prevent clutter
         run: |
           git fetch --prune --tags
           git tag -l "windows-latest-*" | sort | head -n -3 | xargs -r git push --delete origin
