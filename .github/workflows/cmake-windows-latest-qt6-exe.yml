@@ -26,13 +26,15 @@ jobs:
 
       - name: Wait for branch to sync (prevent race condition)
         run: sleep 5  # Ensure branch push is completed before tagging
+        shell: bash  # Force Bash execution on Windows
 
       - name: Create a temporary versioned tag
+        shell: bash  # Ensure the shell supports date commands
         run: |
-          TEMP_TAG=windows-latest-$(date +%Y%m%d-%H%M%S)
+          TEMP_TAG="windows-latest-$(date +%Y%m%d-%H%M%S)"
           echo "TEMP_TAG=$TEMP_TAG" >> $GITHUB_ENV
-          git tag $TEMP_TAG ${{ env.ALIAS_BRANCH }}
-          git push origin $TEMP_TAG
+          git tag "$TEMP_TAG" ${{ env.ALIAS_BRANCH }}
+          git push origin "$TEMP_TAG"
 
       - name: Set up Qt
         uses: jurplel/install-qt-action@v3
@@ -54,6 +56,7 @@ jobs:
 
       - name: Rename Executable with Branch Alias
         run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-win64.exe
+        shell: bash  # Ensure Unix-style `mv` command works
 
       - name: Create New GitHub Release
         uses: softprops/action-gh-release@v1
@@ -66,6 +69,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete old `windows-latest-*` tags to prevent clutter
+        shell: bash
         run: |
           git fetch --prune --tags
           git tag -l "windows-latest-*" | sort | head -n -3 | xargs -r git push --delete origin
