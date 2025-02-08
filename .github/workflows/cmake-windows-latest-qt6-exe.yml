@@ -25,13 +25,14 @@ jobs:
           git push origin ${{ env.ALIAS_BRANCH }}
 
       - name: Wait for branch to sync (prevent race condition)
-        run: sleep 5  # Ensure branch push is completed before tagging
-        shell: bash  # Force Bash execution on Windows
+        run: sleep 5
+        shell: bash
 
-      - name: Create a temporary versioned tag
-        shell: bash  # Ensure the shell supports date commands
+      - name: Create a temporary tag using commit hash
+        shell: bash
         run: |
-          TEMP_TAG="windows-latest-$(date +%Y%m%d-%H%M%S)"
+          SHORT_HASH=$(git rev-parse --short ${{ env.ALIAS_BRANCH }})
+          TEMP_TAG="windows-latest-$SHORT_HASH"
           echo "TEMP_TAG=$TEMP_TAG" >> $GITHUB_ENV
           git tag "$TEMP_TAG" ${{ env.ALIAS_BRANCH }}
           git push origin "$TEMP_TAG"
@@ -56,13 +57,13 @@ jobs:
 
       - name: Rename Executable with Branch Alias
         run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-win64.exe
-        shell: bash  # Ensure Unix-style `mv` command works
+        shell: bash
 
       - name: Create New GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
-          tag_name: ${{ env.TEMP_TAG }}  # Use dynamically created tag
+          tag_name: ${{ env.TEMP_TAG }}  # Uses commit-based tag
           files: |
             build/DaisyChain-win64.exe
         env:
