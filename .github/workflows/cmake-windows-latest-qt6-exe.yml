@@ -37,7 +37,7 @@ jobs:
       - name: Recreate and push new tag
         run: |
           git tag ${{ github.event.inputs.tag }}
-          git push origin ${{ github.event.inputs.tag }}
+          git push --force origin ${{ github.event.inputs.tag }}
 
       - name: Set up Qt
         uses: jurplel/install-qt-action@v3
