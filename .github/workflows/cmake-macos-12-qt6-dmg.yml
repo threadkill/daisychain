@@ -1,27 +1,41 @@
-name: macOS-12-latest Qt6 Build
+name: macOS-x86 Qt6 Build
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to use for the release"
-        required: true
-        default: "macos-12-latest"  # Default tag
 
 env:
   BUILD_TYPE: Release
+  ALIAS_BRANCH: macos-12-latest
 
 jobs:
   build-and-release:
     runs-on: macos-12
 
     steps:
-      - name: Checkout code
+      - name: Checkout master branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}  # Checkout the specified tag
+          ref: master
+          fetch-depth: 0
 
-      # Install dependencies (Homebrew and Qt6)
+      - name: Move alias branch `macos-12-latest` to latest commit
+        run: |
+          git branch -f ${{ env.ALIAS_BRANCH }} master
+          git push origin ${{ env.ALIAS_BRANCH }}
+
+      - name: Wait for branch to sync (prevent race condition)
+        run: sleep 5
+        shell: bash
+
+      - name: Create a temporary tag using commit hash
+        shell: bash
+        run: |
+          SHORT_HASH=$(git rev-parse --short ${{ env.ALIAS_BRANCH }})
+          TEMP_TAG="macos-12-latest-$SHORT_HASH"
+          echo "TEMP_TAG=$TEMP_TAG" >> $GITHUB_ENV
+          git tag "$TEMP_TAG" ${{ env.ALIAS_BRANCH }}
+          git push origin "$TEMP_TAG"
+
       - name: Install Homebrew
         run: |
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
@@ -34,33 +48,37 @@ jobs:
           echo "$(brew --prefix qt@6)/lib" >> $GITHUB_PATH
           echo "$(brew --prefix qt@6)/include" >> $GITHUB_PATH
 
-      # Configure the build
       - name: Configure CMake
         run: |
           mkdir build
           cd build
           cmake .. -DCMAKE_INSTALL_PREFIX=/tmp/ -DCMAKE_PREFIX_PATH=$(brew --prefix qt@6)
 
-      # Build the project
       - name: Build
         run: |
           cd build
           cmake --build . -- -j$(sysctl -n hw.ncpu)
 
-      # Install the project
       - name: Install
         run: |
           cd build
           cmake --install .
 
-      - name: Rename Executable with Tag Version
-        run: mv /tmp/DaisyChain.dmg /tmp/DaisyChain-${{ github.event.inputs.tag }}.dmg
+      - name: Rename Executable with Branch Alias
+        run: mv /tmp/DaisyChain.dmg /tmp/DaisyChain-${{ env.ALIAS_BRANCH }}.dmg
+        shell: bash
 
-      - name: Create GitHub Release
+      - name: Create New GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
-          tag_name: ${{ github.event.inputs.tag }}
-          files: /tmp/DaisyChain-${{ github.event.inputs.tag }}.dmg
+          tag_name: ${{ env.TEMP_TAG }}  # Uses commit-based tag
+          files: /tmp/DaisyChain-${{ env.ALIAS_BRANCH }}.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old `macos-12-latest-*` tags to prevent clutter
+        shell: bash
+        run: |
+          git fetch --prune --tags
+          git tag --list "macos-12-latest-*" --sort=-creatordate | tail -n +4 | xargs -r git push --delete origin
