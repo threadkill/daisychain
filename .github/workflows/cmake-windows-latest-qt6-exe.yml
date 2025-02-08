@@ -6,7 +6,7 @@ on:
       tag:
         description: "Tag to use for the release"
         required: true
-        default: "build/installer/windows-latest" # Default tag
+        default: "build/installer/windows-latest"
 
 env:
   BUILD_TYPE: Release
@@ -19,8 +19,24 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.inputs.tag }}  # Checkout the specified tag
-          submodules: recursive  # Update submodules recursively
+          fetch-depth: 0  # Ensure full history is fetched
+          submodules: recursive
+
+      - name: Delete existing GitHub Release (if exists)
+        run: |
+          gh release delete ${{ github.event.inputs.tag }} --yes || true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete existing tag (if exists)
+        run: |
+          git tag -d ${{ github.event.inputs.tag }} || true
+          git push origin --delete ${{ github.event.inputs.tag }} || true
+
+      - name: Recreate tag
+        run: |
+          git tag ${{ github.event.inputs.tag }}
+          git push origin ${{ github.event.inputs.tag }}
 
       - name: Set up Qt
         uses: jurplel/install-qt-action@v3
@@ -30,23 +46,20 @@ jobs:
           target: desktop
           arch: win64_msvc2019_64
 
-      # Configure the build
       - name: Configure CMake
         run: |
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH=C:\Qt\6.7.2\msvc2019_64 -DCMAKE_INSTALL_PREFIX=C:\Temp\DaisyChain -DBUILD_PYTHON_MODULE=OFF
 
-      # Install the project
       - name: Build and Install
         run: cmake --build build --target install --config Release -- /m
 
-      # Create NSIS installer
       - name: Package with CPack
         run: cmake --build build --target run_cpack --config Release -j
 
       - name: Rename Executable with Tag Version
         run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-win64.exe
 
-      - name: Create GitHub Release
+      - name: Create New GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
