@@ -2,14 +2,10 @@ name: Windows Qt6 Build
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to use for the release"
-        required: true
-        default: "build/installer/windows-latest"
 
 env:
   BUILD_TYPE: Release
+  ALIAS_BRANCH: windows-latest
 
 jobs:
   build-and-release:
@@ -19,25 +15,14 @@ jobs:
       - name: Checkout master branch
         uses: actions/checkout@v3
         with:
-          ref: master  # Ensure we always build from master
+          ref: master  # Always pull the latest master
           fetch-depth: 0  # Ensure full history is fetched
           submodules: recursive
 
-      - name: Delete existing GitHub Release (if exists)
+      - name: Move alias branch `windows-latest` to latest commit
         run: |
-          gh release delete ${{ github.event.inputs.tag }} --yes || true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Delete existing tag (if exists)
-        run: |
-          git tag -d ${{ github.event.inputs.tag }} || true
-          git push origin --delete ${{ github.event.inputs.tag }} || true
-
-      - name: Recreate and push new tag
-        run: |
-          git tag ${{ github.event.inputs.tag }}
-          git push --force origin ${{ github.event.inputs.tag }}
+          git branch -f ${{ env.ALIAS_BRANCH }} master  # Update alias to track master
+          git push origin ${{ env.ALIAS_BRANCH }}  # Push the updated alias branch
 
       - name: Set up Qt
         uses: jurplel/install-qt-action@v3
@@ -57,14 +42,14 @@ jobs:
       - name: Package with CPack
         run: cmake --build build --target run_cpack --config Release -j
 
-      - name: Rename Executable with Tag Version
+      - name: Rename Executable with Branch Alias
         run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-win64.exe
 
       - name: Create New GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
-          tag_name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ env.ALIAS_BRANCH }}  # Uses branch alias instead of tag
           files: |
             build/DaisyChain-win64.exe
         env:
