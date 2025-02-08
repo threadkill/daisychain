@@ -1,4 +1,4 @@
-name: macOS-latest Qt6 Build
+name: macOS Qt6 Build
 
 on:
   workflow_dispatch:
