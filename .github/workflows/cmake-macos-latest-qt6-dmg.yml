@@ -2,31 +2,46 @@ name: macOS-latest Qt6 Build
 
 on:
   workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to use for the release"
-        required: true
-        default: "build/installer/macos-latest" # Default tag
 
 env:
   BUILD_TYPE: Release
+  ALIAS_BRANCH: macos-latest
 
 jobs:
   build-and-release:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout master branch
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.inputs.tag }}  # Checkout the specified tag
+          ref: master  # Always build from master
+          fetch-depth: 0  # Ensure full history is fetched
           submodules: recursive
+
+      - name: Move alias branch `macos-latest` to latest commit
+        run: |
+          git branch -f ${{ env.ALIAS_BRANCH }} master
+          git push origin ${{ env.ALIAS_BRANCH }}
+
+      - name: Wait for branch to sync (prevent race condition)
+        run: sleep 5
+        shell: bash
+
+      - name: Create a temporary tag using commit hash
+        shell: bash
+        run: |
+          SHORT_HASH=$(git rev-parse --short ${{ env.ALIAS_BRANCH }})
+          TEMP_TAG="macos-latest-$SHORT_HASH"
+          echo "TEMP_TAG=$TEMP_TAG" >> $GITHUB_ENV
+          git tag "$TEMP_TAG" ${{ env.ALIAS_BRANCH }}
+          git push origin "$TEMP_TAG"
 
       # Install dependencies (Homebrew and Qt6)
       - name: Install Homebrew
         run: |
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-      
+
       - name: Install Qt6 via Homebrew
         run: |
           brew update
@@ -47,21 +62,28 @@ jobs:
         run: |
           cd build
           cmake --build . -- -j$(sysctl -n hw.ncpu)
-          
+
       # Install the project
       - name: Install
         run: |
           cd build
           cmake --install .
 
-      - name: Rename Executable with Tag Version
+      - name: Rename Executable with Branch Alias
         run: mv /tmp/DaisyChain.dmg /tmp/DaisyChain-macos.dmg
+        shell: bash
 
-      - name: Create GitHub Release
+      - name: Create New GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
-          tag_name: ${{ github.event.inputs.tag }}
+          tag_name: ${{ env.TEMP_TAG }}  # Uses commit-based tag
           files: /tmp/DaisyChain-macos.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Delete old `macos-latest-*` tags to prevent clutter
+        shell: bash
+        run: |
+          git fetch --prune --tags
+          git tag -l "macos-latest-*" | sort | head -n -3 | xargs -r git push --delete origin
