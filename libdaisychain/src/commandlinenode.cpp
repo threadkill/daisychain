@@ -343,7 +343,8 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 bool
 CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
 {
-    std::string cmdLine = "cmd.exe /C \"call " + command + "\"";
+    std::string pipename = R"(\\.\pipe\)" + name_ + "_" + id_;
+    std::string cmd = "cmd.exe /C \"call " + command + "\"";
 
     STARTUPINFOEXA si;
     PROCESS_INFORMATION pi;
@@ -355,107 +356,198 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = nullptr;
 
-    HANDLE hStdOutRead = nullptr;
-    HANDLE hStdOutWrite = nullptr;
+    HANDLE read_handle = CreateNamedPipeA (pipename.c_str(),
+                                           PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
+                                           PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                                           1,    // single instance
+                                           8192, // out buffer size
+                                           8192, // in buffer size
+                                           0,    // default timeout
+                                           &sa);
 
-    if (!CreatePipe (&hStdOutRead, &hStdOutWrite, &sa, 0)) {
-        LERROR << LOGNODE << "Failed to create pipe for STDOUT. " << GetLastError();
+    if (read_handle == INVALID_HANDLE_VALUE) {
+        LERROR << LOGNODE << "Failed to create named pipe for STDOUT. " << GetLastError();
         return false;
     }
 
-    SIZE_T attrListSize = 0;
-    InitializeProcThreadAttributeList (nullptr, 1, 0, &attrListSize);
-    si.lpAttributeList = (LPPROC_THREAD_ATTRIBUTE_LIST)HeapAlloc (GetProcessHeap(), 0, attrListSize);
+    HANDLE write_handle = CreateFileA (pipename.c_str(),
+                                       GENERIC_WRITE,
+                                       0,
+                                       &sa,
+                                       OPEN_EXISTING,
+                                       FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+                                       NULL);
+
+    if (write_handle == INVALID_HANDLE_VALUE) {
+        LERROR << LOGNODE << "Failed to open named pipe client handle for STDOUT. " << GetLastError();
+        CloseHandle (read_handle);
+        return false;
+    }
+
+    SIZE_T attr_list_size = 0;
+    InitializeProcThreadAttributeList (nullptr, 1, 0, &attr_list_size);
+
+    si.lpAttributeList = static_cast<LPPROC_THREAD_ATTRIBUTE_LIST> (HeapAlloc (GetProcessHeap(), 0, attr_list_size));
     if (!si.lpAttributeList) {
-        CloseHandle (hStdOutRead);
-        CloseHandle (hStdOutWrite);
+        CloseHandle (read_handle);
+        CloseHandle (write_handle);
         return false;
     }
 
-    if (!InitializeProcThreadAttributeList (si.lpAttributeList, 1, 0, &attrListSize)) {
+    if (!InitializeProcThreadAttributeList (si.lpAttributeList, 1, 0, &attr_list_size)) {
         HeapFree (GetProcessHeap(), 0, si.lpAttributeList);
-        CloseHandle (hStdOutRead);
-        CloseHandle (hStdOutWrite);
+        CloseHandle (read_handle);
+        CloseHandle (write_handle);
         return false;
     }
 
-    HANDLE handlesToInherit[] = {hStdOutWrite};
+    HANDLE inherited_handles[] = {write_handle};
     if (!UpdateProcThreadAttribute (si.lpAttributeList,
                                     0,
                                     PROC_THREAD_ATTRIBUTE_HANDLE_LIST,
-                                    handlesToInherit,
-                                    sizeof (handlesToInherit),
+                                    inherited_handles,
+                                    sizeof (inherited_handles),
                                     nullptr,
                                     nullptr)) {
         DeleteProcThreadAttributeList (si.lpAttributeList);
         HeapFree (GetProcessHeap(), 0, si.lpAttributeList);
-        CloseHandle (hStdOutRead);
-        CloseHandle (hStdOutWrite);
+        CloseHandle (read_handle);
+        CloseHandle (write_handle);
         return false;
     }
 
     si.StartupInfo.cb = sizeof (STARTUPINFOEXA);
     si.StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
-    si.StartupInfo.hStdOutput = hStdOutWrite;
-    si.StartupInfo.hStdError = hStdOutWrite;
+    si.StartupInfo.hStdOutput = write_handle;
+    si.StartupInfo.hStdError = write_handle;
     si.StartupInfo.hStdInput = nullptr;
 
     auto env = get_environment();
 
+    // only explicitly named handles are inherited.
     BOOL result = CreateProcessA (nullptr,
-                                  &cmdLine[0],
+                                  &cmd[0], // command line
                                   nullptr,
                                   nullptr,
-                                  TRUE,
+                                  TRUE, // bInheritHandles
                                   EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW,
                                   env.data(),
                                   nullptr,
                                   &si.StartupInfo,
                                   &pi);
 
-    CloseHandle (hStdOutWrite);
+    CloseHandle (write_handle);
     DeleteProcThreadAttributeList (si.lpAttributeList);
     HeapFree (GetProcessHeap(), 0, si.lpAttributeList);
 
     if (!result) {
         LERROR << LOGNODE << "CreateProcess failed with error " << GetLastError();
-        CloseHandle (hStdOutRead);
+        CloseHandle (read_handle);
         return false;
     }
 
-    const DWORD bufferSize = 8192;
-    char buffer[bufferSize];
-    DWORD bytesRead;
+    HANDLE read_event = CreateEvent (nullptr, TRUE, FALSE, nullptr);
+    if (!read_event) {
+        LERROR << LOGNODE << "CreateEvent for read failed: " << GetLastError();
+        CloseHandle (pi.hProcess);
+        CloseHandle (pi.hThread);
+        CloseHandle (read_handle);
+        return false;
+    }
 
-    while (true) {
-        BOOL success = ReadFile (hStdOutRead, buffer, bufferSize - 1, &bytesRead, nullptr);
-        if (!success) {
-            DWORD error = GetLastError();
-            if (error == ERROR_BROKEN_PIPE) {
-                break;
+    const DWORD buffersize = 8192;
+    char buffer[buffersize];
+    DWORD bytesread = 0;
+    HANDLE read_wait_handles[2] = {read_event, terminate_event_};
+    bool finished = false;
+
+    while (!finished) {
+        OVERLAPPED ol;
+        ZeroMemory (&ol, sizeof (ol));
+        ol.hEvent = read_event;
+
+        if (!ReadFile (read_handle, buffer, buffersize - 1, &bytesread, &ol)) {
+            DWORD read_error = GetLastError();
+            if (read_error == ERROR_IO_PENDING) {
+                DWORD read_wait_result = WaitForMultipleObjects (2, read_wait_handles, FALSE, INFINITE);
+
+                switch (read_wait_result) {
+                    case WAIT_OBJECT_0:
+                        if (!GetOverlappedResult (read_handle, &ol, &bytesread, FALSE)) {
+                            DWORD error = GetLastError();
+                            if (error != ERROR_BROKEN_PIPE) {
+                                LERROR << LOGNODE << "GetOverlappedResult failed with error " << error;
+                            }
+                            finished = true;
+                        }
+                        else {
+                            if (bytesread == 0) {
+                                finished = true;
+                            }
+                            else {
+                                buffer[bytesread] = '\0';
+                                output += buffer;
+                            }
+                        }
+                        break;
+                    case WAIT_OBJECT_0 + 1: // terminate event
+                        finished = true;
+                        break;
+                    default:
+                        LERROR << LOGNODE << "WaitForMultipleObjects(read) failed with error " << GetLastError();
+                        finished = true;
+                        break;
+                }
             }
-            LERROR << LOGNODE << "ReadFile failed with error " << error;
+            else if (read_error == ERROR_BROKEN_PIPE) { // normal termination. not an error.
+                finished = true;
+            }
+            else {
+                LERROR << LOGNODE << "ReadFile failed with error " << read_error;
+                finished = true;
+            }
+        }
+        else {
+            if (bytesread == 0) {
+                finished = true;
+            }
+            else {
+                buffer[bytesread] = '\0';
+                output += buffer;
+            }
+        }
+
+        ResetEvent (read_event);
+    }
+
+    CloseHandle (read_event);
+    HANDLE process_wait_handles[2] = {pi.hProcess, terminate_event_};
+
+    DWORD process_wait_result = WaitForMultipleObjects (2, process_wait_handles, FALSE, INFINITE);
+
+    switch (process_wait_result) {
+        case WAIT_OBJECT_0:     // normal event
             break;
-        }
-        if (bytesRead > 0) {
-            buffer[bytesRead] = '\0';
-            output += buffer;
-        }
+        case WAIT_OBJECT_0 + 1: // terminate event
+            TerminateProcess (pi.hProcess, 1);
+            WaitForSingleObject (pi.hProcess, INFINITE);
+            break;
+        default:
+            LERROR << LOGNODE << "WaitForMultipleObjects(proc) failed with error " << GetLastError();
+            break;
     }
 
-    WaitForSingleObject (pi.hProcess, INFINITE);
-
-    DWORD exitCode;
-    if (!GetExitCodeProcess (pi.hProcess, &exitCode)) {
+    DWORD exitcode;
+    if (!GetExitCodeProcess (pi.hProcess, &exitcode)) {
         LERROR << LOGNODE << "GetExitCodeProcess failed with error " << GetLastError();
-        exitCode = 1;
+        exitcode = 1;
     }
 
-    CloseHandle (hStdOutRead);
+    CloseHandle (read_handle);
     CloseHandle (pi.hProcess);
     CloseHandle (pi.hThread);
 
-    return (exitCode == 0);
+    return (exitcode == 0);
 }
 
 
