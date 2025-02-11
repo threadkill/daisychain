@@ -193,10 +193,14 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
     if (singlefile) {
         std::string basename = fs::path(input).filename().string();
         set_variable ("BASENAME", basename);
+        std::string stem = fs::path(input).stem().string();
+        set_variable ("STEM", stem);
+        std::string extension = fs::path(input).extension().string();
+        set_variable ("EXT", extension);
     }
 
     if (!outputfile_.empty()) {
-        if (outputfile_.find("STDOUT") != std::string::npos) {
+        if (outputfile_.find ("STDOUT") != std::string::npos) {
             use_std_out = true;
         }
         else {
@@ -207,8 +211,8 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
 
     if (test_) {
         LTEST << LOGNODE << "\n" << shell_expand (command_);
-        OpenOutputs(sandbox);
-        WriteOutputs(output);
+        OpenOutputs (sandbox);
+        WriteOutputs (output);
         CloseOutputs();
         return true;
     }
@@ -237,10 +241,10 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
             m_split_input (output, tokens);
 
             for (const auto& token : tokens) {
-                WriteOutputs(token);
+                WriteOutputs (token);
             }
         } else {
-            WriteOutputs(output);
+            WriteOutputs (output);
         }
     }
 
@@ -376,7 +380,7 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
                                        &sa,
                                        OPEN_EXISTING,
                                        FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
-                                       NULL);
+                                       nullptr);
 
     if (write_handle == INVALID_HANDLE_VALUE) {
         LERROR << LOGNODE << "Failed to open named pipe client handle for STDOUT. " << GetLastError();
