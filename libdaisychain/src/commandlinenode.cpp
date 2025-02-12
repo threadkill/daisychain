@@ -533,9 +533,15 @@ CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
         case WAIT_OBJECT_0:     // normal event
             break;
         case WAIT_OBJECT_0 + 1: // terminate event
+            {
+            auto children = get_child_processes (pi.hProcess);
+            for (auto child : children) {
+                terminate_pid (child);
+            }
             TerminateProcess (pi.hProcess, 1);
             WaitForSingleObject (pi.hProcess, INFINITE);
             break;
+            }
         default:
             LERROR << LOGNODE << "WaitForMultipleObjects(proc) failed with error " << GetLastError();
             break;

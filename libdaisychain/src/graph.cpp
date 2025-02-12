@@ -464,7 +464,7 @@ Graph::Cleanup()
     }
 
 #ifdef _WIN32
-    int status = DeleteDirectoryRecursively (sandbox_);
+    int status = delete_directory_recursive (sandbox_);
     status == 1 ? LINFO << "Cleanup finished: " << sandbox_ : LERROR << "Cleanup failed: " << sandbox_;
 #else
     auto rmdirtree = [] (const char* path, const struct stat* buf, int type, struct FTW* ftwb) {
