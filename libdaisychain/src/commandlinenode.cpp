@@ -177,26 +177,24 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
     bool use_std_out = false;
     std::string output = input;
 
-    // Replace newline delimiters with spaces before shell expansion
-    bool singlefile = true;
-    std::string input_ = input;
-    for (char& ch : input_) {
-        if (ch == '\n') {
-            singlefile = false;
-            ch = ' ';
-        }
-    }
-
     set_variable ("SANDBOX", sandbox);
-    set_variable ("INPUT", input_);
 
-    if (singlefile) {
-        std::string basename = fs::path(input).filename().string();
-        set_variable ("BASENAME", basename);
-        std::string stem = fs::path(input).stem().string();
+    if (!batch_) {
+        auto dirname = fs::path(input).parent_path().string();
+        set_variable ("DIRNAME", dirname);
+        auto filename = fs::path(input).filename().string();
+        set_variable ("FILENAME", filename);
+        auto stem = fs::path(input).stem().string();
         set_variable ("STEM", stem);
-        std::string extension = fs::path(input).extension().string();
+        auto extension = fs::path(input).extension().string();
         set_variable ("EXT", extension);
+        set_variable ("INPUT", input);
+    }
+    else {
+        // Replace newline delimiters with spaces before shell expansion
+        std::string input_ = input;
+        std::ranges::replace (input_, '\n', ' ');
+        set_variable ("INPUT", input_);
     }
 
     if (!outputfile_.empty()) {
@@ -266,6 +264,17 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 
     if (setenv ("INPUT", shell_expand (input).c_str(), true) < 0)
         return false;
+
+    if (!batch_) {
+        auto dirname = fs::path(input).parent_path().c_str();
+        setenv ("DIRNAME", dirname, true);
+        auto filename = fs::path(input).filename().c_str();
+        setenv ("FILENAME", filename, true);
+        auto stem = fs::path(input).stem().c_str();
+        setenv ("STEM", stem, true);
+        auto extension = fs::path(input).extension().c_str();
+        setenv ("EXT", extension, true);
+    }
 
     if (!outputfile_.empty()) {
         if (outputfile_.find ("STDOUT") != string::npos) {
