@@ -207,8 +207,10 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
         }
     }
 
+    auto expanded_command_ = shell_expand (command_);
+
     if (test_) {
-        LTEST << LOGNODE << "\n" << shell_expand (command_);
+        LTEST << LOGNODE << "\n" << expanded_command_;
         OpenOutputs (sandbox);
         WriteOutputs (output);
         CloseOutputs();
@@ -216,19 +218,19 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
     }
 
     // Log the command line for debugging
-    LDEBUG << LOGNODE << "Executing command line: " << shell_expand (command_);
+    LDEBUG << LOGNODE << "Executing command line: " << expanded_command_;
 
     std::string std_out;
-    stat = run_cmdexe (command_, std_out);
+    stat = run_cmdexe (expanded_command_, std_out);
 
     // Log the output from the child process
     if (!std_out.empty()) {
-        LDEBUG << LOGNODE << "Child process output:\n" << std_out;
+        LDEBUG << LOGNODE << "\n" << std_out;
     }
 
     if (!stat) {
         LERROR << LOGNODE << "run_command failed.";
-        LERROR << LOGNODE << "\n" << shell_expand (command_);
+        LERROR << LOGNODE << "\n" << expanded_command_;
     } else {
         LDEBUG << LOGNODE << "run_command succeeded.";
 
@@ -357,7 +359,7 @@ bool
 CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
 {
     std::string pipename = R"(\\.\pipe\)" + name_ + "_" + id_;
-    std::string cmd = "cmd.exe /C \"call " + command + "\"";
+    std::string cmd = "cmd.exe /V:ON /S /C " + command;
 
     STARTUPINFOEXA si;
     PROCESS_INFORMATION pi;
