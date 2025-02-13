@@ -44,13 +44,15 @@ ChainScene::updateGraphicsObject (const NodeId qtnode)
 
     if (datamodel->name() == "Shell Command") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
-            "Shell Command:\n"
+            "Shell Command:\n\n"
             " - Executes any command-line program in a shell environment.\n"
             " - Shell variables can be passed in using the global variables panel.\n"
             " - When batch is checked, execution is deferred until all inputs are read.\n"
-            " - Batched inputs are concatenated into a single, newline-separated string.\n"
-            " - BASENAME variable (filename only) is defined for each input automatically.\n"
-            " - SANDBOX variable is the location used for logs and temp files.\n"
+            " - Batched inputs are concatenated into a single string.\n"
+            " - SANDBOX variable is set to the temp location created for each graph.\n"
+            " - INPUT variable is set automatically for reference in the command field.\n"
+            " - DIRNAME, FILENAME, STEM and EXT variables are defined for each input.\n"
+            " - OUTPUT variable is set to INPUT but can be overridden in the output field.\n"
             " - STDOUT variable is captured automatically if a program writes to stdout."
             );
     }
@@ -59,12 +61,12 @@ ChainScene::updateGraphicsObject (const NodeId qtnode)
             "Filter:\n"
             " - Matches inputs against glob or regular expression patterns.\n"
             " - Unmatched inputs are filtered out.\n"
-            " - Use invert to filter out matches.");
+            " - Use invert to exclude the matches.");
     }
     else if (datamodel->name() == "Concat") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (
             "Concat:\n"
-            " - Concatenates all inputs into a single output.");
+            " - Concatenates all inputs into a single output.\n");
     }
     else if (datamodel->name() == "Distro") {
         reinterpret_cast<QGraphicsObject*>(nodeGraphicsObject(qtnode))->setToolTip (

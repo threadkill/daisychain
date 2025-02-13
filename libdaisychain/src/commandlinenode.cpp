@@ -221,7 +221,7 @@ CommandLineNode::run_command (const std::string& input, const std::string& sandb
     LDEBUG << LOGNODE << "Executing command line: " << expanded_command_;
 
     std::string std_out;
-    stat = run_cmdexe (expanded_command_, std_out);
+    stat = create_process (expanded_command_, std_out);
 
     // Log the output from the child process
     if (!std_out.empty()) {
@@ -356,7 +356,7 @@ CommandLineNode::run_command (const string& input, const string& sandbox)
 #ifdef _WIN32
 
 bool
-CommandLineNode::run_cmdexe (const std::string& command, std::string& output)
+CommandLineNode::create_process (const std::string& command, std::string& output)
 {
     std::string pipename = R"(\\.\pipe\)" + name_ + "_" + id_;
     std::string cmd = "cmd.exe /V:ON /S /C " + command;
@@ -578,7 +578,7 @@ CommandLineNode::shell_expand (const string& input)
     // Perform variable expansion for use outside of CreateProcess
     std::string command = "echo " + input;
     string output;
-    if (!run_cmdexe (command, output))
+    if (!create_process (command, output))
         return "";
 
     // Remove any trailing newline characters that echo adds

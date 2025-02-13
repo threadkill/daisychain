@@ -47,7 +47,7 @@ private:
 
 #ifdef _WIN32
 
-    bool run_cmdexe (const string& command, string& output);
+    bool create_process (const string& command, string& output);
 
     void set_variable (const string& name, const string& value) { environment_[name] = value; };
 
