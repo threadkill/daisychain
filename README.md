@@ -42,7 +42,7 @@ Creating command-line tools is often faster than developing GUI-based tools for 
 1. *Batch processing* files typically requires writing the same type of boilerplate code in a scripting language over and over again (*i.e. option flags, loops constructs, exec calls to other applications, I/O handling, signal handling, etc*). DaisyChain replaces that process with a framework that controls the order of execution, **and provides a means to parallelize processes.**
 2. *Running scripts* requires some working knowledge of a terminal and shell syntax. DaisyChain encapsulates that
 process in a GUI application which does not require terminal interaction by users.
-3. *Distributing tools* is easier by encapsulating them in a graph along with their parameters.
+3. *Distributing tools* is easier by encapsulating a pipeline and parameters in a single graph file.
 4. *Polling/Watching* for file changes is very system-specific and often requires writing separate code for each OS.
 
 <br/>
