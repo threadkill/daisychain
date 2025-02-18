@@ -10,11 +10,11 @@
 1. [What?](#what)
 2. [Why?](#why)
 3. [How?](#how)
-4. [Downloads](#downloads)
-5. [Building](#building)
-6. [Development](#development)
-7. [Wiki](#wiki)
-8. [Examples](#examples)
+4. [Examples](#examples)
+5. [Wiki](#wiki)
+6. [Downloads](#downloads)
+7. [Building](#building)
+8. [Development](#development)
 
 <br/>
 <br/>
@@ -75,6 +75,18 @@ substitution patterns in the ```${OUTPUT}``` field of a node (*if present*). Add
 ```${OUTPUT}``` can be set to ```${STDOUT}```.
 
 __Notes__ can be stored with the graph and displayed in the GUI.
+
+<br/>
+
+## Examples<a id='examples'></a>
+
+There is a separate [repository](https://github.com/threadkill/daisychain-graphs) with some example graphs. This repository has its own [wiki](https://github.com/threadkill/daisychain-graphs/wiki) outlining graph usage.
+
+<br/>
+
+## Wiki<a id='wiki'></a>
+
+Additional information can be found on the [wiki](https://github.com/threadkill/daisychain/wiki).
 
 <br/>
 
@@ -162,17 +174,5 @@ node name to be sure you're in the exact node you're trying to debug.
     if (name_ == "MyCommand1")
         m_debug_wait(true);
 ```
-
-<br/>
-
-## Wiki<a id='wiki'></a>
-
-Additional information can be found on the [wiki](https://github.com/threadkill/daisychain/wiki).
-
-<br/>
-
-## Examples<a id='examples'></a>
-
-There is a separate [repository](https://github.com/threadkill/daisychain-graphs) with some example graphs. This repository has its own [wiki](https://github.com/threadkill/daisychain-graphs/wiki) outlining graph usage.
 
 <br/>
