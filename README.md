@@ -62,7 +62,7 @@ The current set of executable nodes includes:
 * __FileList__ - converts a text file into input line-by-line.
 * __Watch__ - polls for changes to directories/files and writes the modified filenames to the outputs.
 
-__Options__ are passed to nodes via variables that can be set in the __Variables__ panel in
+__Options__ can be passed to nodes via variables that can be set in the __Variables__ panel in
 the GUI or set using flags from the command-line tool. These are effectively environment variables.
 
 __Processing__ happens one string token at a time. Nodes loop over tokens and execute once per token. This behavior can be changed by checking the __`batch`__ checkbox (*when a node supports it*); in which case, a node will __block__ until it has received all inputs which are then concatenated into one large string and set as the input for the node.
