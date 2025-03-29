@@ -21,7 +21,7 @@
 
 ## What?<a id='what'></a>
 
-DaisyChain is a node-based dependency graph for executing command-line programs which typically involve file processing. The GUI supports drag-n-drop for files (*both graphs and file inputs*). Nodes in the graph can be executed in serial or parallel. There is also a separate command-line application for running graphs in a headless environment.
+DaisyChain is a node-based dependency graph for executing command-line programs and pipelines which typically involve file processing. The GUI supports drag-n-drop for files (*both graphs and file inputs*). Nodes in the graph can be executed in serial or parallel. There is also a separate command-line application for running graphs in a headless environment.
 
 The primary node type is the CommandLine node which runs programs in a shell environment. Executables run by this node are __NOT__ required to support UNIX pipeline semantics (e.g. read STDIN, write STDOUT). The graph functions like [xargs](https://www.man7.org/linux/man-pages/man1/xargs.1.html#EXAMPLES) in that regard. However, standard output can be captured and used as input. The graph itself simply passes string tokens along and waits for the nodes to finish.
 
