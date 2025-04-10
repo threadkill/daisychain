@@ -1,8 +1,7 @@
-// # MIT License
-// # Copyright (c) 2025 Stephen J. Parker
-// # SPDX-License-Identifier: MIT
-// # See LICENSE file for full license text.
-//
+// MIT License
+// Copyright (c) 2025 Stephen J. Parker
+// SPDX-License-Identifier: MIT
+// See LICENSE file for full license text.
 
 #include "filelistnode.h"
 #include <string>
