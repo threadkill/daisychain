@@ -154,7 +154,7 @@ elseif (WIN32)
             WORKING_DIRECTORY \$<TARGET_FILE_DIR:chain>)"
     )
     install (DIRECTORY "${WINDEPLOYQT_TMP}/" DESTINATION .)
-    install (FILES "${CMAKE_SOURCE_DIR}/COPYING" DESTINATION . RENAME license.txt)
+    install (FILES "${CMAKE_SOURCE_DIR}/LICENSE" DESTINATION . RENAME license.txt)
 
     # CPack configuration for packaging the *.exe installer
     include (InstallRequiredSystemLibraries)
