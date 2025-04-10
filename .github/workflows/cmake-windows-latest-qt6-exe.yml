@@ -56,7 +56,7 @@ jobs:
         run: cmake --build build --target run_cpack --config Release -j
 
       - name: Rename Executable with Branch Alias
-        run: mv build/DaisyChain-1.0.0-win64.exe build/DaisyChain-win64.exe
+        run: mv build/DaisyChain-*-win64.exe build/DaisyChain-win64.exe
         shell: bash
 
       - name: Create New GitHub Release
