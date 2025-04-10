@@ -1,3 +1,4 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Windows Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-windows-latest-qt6-exe.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/win-latest)
 [![macOS-latest Qt6 Build](https://github.com/threadkill/daisychain/actions/workflows/cmake-macos-latest-qt6-dmg.yml/badge.svg)](https://github.com/threadkill/daisychain/releases/tag/macos-latest)
 
