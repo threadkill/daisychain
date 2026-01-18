@@ -32,8 +32,11 @@ include_directories (
     libdaisychain/src
 )
 
-add_subdirectory (3rdparty/pybind11)
 add_subdirectory (libdaisychain)
-add_subdirectory (python)
 add_subdirectory (daisy)
 add_subdirectory (chain)
+
+set (PYBIND11_FINDPYTHON ON)
+add_subdirectory (3rdparty/pybind11)
+add_subdirectory (python)
+

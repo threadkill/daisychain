@@ -3,9 +3,7 @@ cmake_minimum_required (VERSION 3.12.0)
 option (BUILD_PYTHON_MODULE "Build pydaisychain Python module" ON)
 
 if (BUILD_PYTHON_MODULE)
-    find_package (Python 3.9 REQUIRED COMPONENTS Development)
-
-    if (Python_FOUND)
+    if (TARGET Python::Module)
         include_directories (
             ${Python_INCLUDE_DIRS}
             src
@@ -17,6 +15,6 @@ if (BUILD_PYTHON_MODULE)
 
         pybind11_add_module (pydaisychain MODULE ${pydaisychain_SOURCES})
         target_link_libraries (pydaisychain PRIVATE daisychain_static)
-        install (TARGETS pydaisychain DESTINATION python3)
+        install (TARGETS pydaisychain DESTINATION lib/python${Python_VERSION_MAJOR}.${Python_VERSION_MINOR}/site-packages)
     endif()
 endif()

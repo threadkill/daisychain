@@ -195,7 +195,7 @@ elseif (WIN32)
 # Linux et al
 else()
     add_executable (chain ${chain_SOURCES})
-    install (TARGETS chain DESTINATION .)
+    install (TARGETS chain DESTINATION bin)
 endif()
 
 add_custom_command (TARGET chain
